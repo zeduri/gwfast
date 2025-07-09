@@ -131,7 +131,7 @@ class GWSignal(object):
         
         import scipy.integrate as igt
         mask = self.strainFreq >= fmin
-        self.strainInteg = igt.cumtrapz(self.strainFreq[mask]**(-7./3.)/S[mask], self.strainFreq[mask], initial = 0)
+        self.strainInteg = igt.cumulative_trapezoid(self.strainFreq[mask]**(-7./3.)/S[mask], self.strainFreq[mask], initial = 0)
         
         self.useEarthMotion = useEarthMotion
         self.noMotion = noMotion

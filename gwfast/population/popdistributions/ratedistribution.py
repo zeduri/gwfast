@@ -12,8 +12,8 @@ from astropy.cosmology import Planck18 as cosmo
 
 from abc import ABC, abstractmethod
 
-import POPutils as utils
-import Globals as glob
+from gwfast.population import POPutils as utils
+from gwfast.population import Globals as glob
 #import POPutils as utils
 
 import h5py
