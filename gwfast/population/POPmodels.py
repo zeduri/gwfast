@@ -89,8 +89,8 @@ class PopulationModel(ABC):
             #return jnp.where(goodsamples, (jnp.sin(theta)*0.5)*(0.5/np.pi)*(jnp.sin(thetaJN)*0.5)*(1./np.pi)*(0.5/np.pi), 0.)
             return jnp.where(goodsamples, (jnp.sin(theta)/(costhetamin - costhetamax))*(1./(self.priorlims_dict['phi'][1] - self.priorlims_dict['phi'][0]))*(jnp.sin(thetaJN)/(costhetaJNmin - costhetaJNmax))*(1./(self.priorlims_dict['psi'][1] - self.priorlims_dict['psi'][0]))*(1./(self.priorlims_dict['tcoal'][1] - self.priorlims_dict['tcoal'][0]))*(1./(self.priorlims_dict['Phicoal'][1] - self.priorlims_dict['Phicoal'][0])), 0.)
         else:
-            #return jnp.where(goodsamples, jnp.log(jnp.sin(theta)*0.5) + jnp.log(0.5/np.pi) + jnp.log(jnp.sin(thetaJN)*0.5) + jnp.log(1./np.pi) + jnp.log(0.5/np.pi), -jnp.inf)
-            return jnp.where(goodsamples, jnp.log(jnp.sin(theta)/(costhetamin - costhetamax)) + jnp.log(1./(self.priorlims_dict['phi'][1] - self.priorlims_dict['phi'][0])) + jnp.log(jnp.sin(thetaJN)/(costhetaJNmin - costhetaJNmax)) + jnp.log(1./(self.priorlims_dict['psi'][1] - self.priorlims_dict['psi'][0])) + jnp.log(1./(self.priorlims_dict['tcoal'][1] - self.priorlims_dict['tcoal'][0])) + jnp.log(1./(self.priorlims_dict['Phicoal'][1] - self.priorlims_dict['Phicoal'][0])), -jnp.inf)
+            #return jnp.where(goodsamples, jnp.log(jnp.sin(theta)*0.5) + jnp.log(0.5/np.pi) + jnp.log(jnp.sin(thetaJN)*0.5) + jnp.log(1./np.pi) + jnp.log(0.5/np.pi), jnp.NINF)
+            return jnp.where(goodsamples, jnp.log(jnp.sin(theta)/(costhetamin - costhetamax)) + jnp.log(1./(self.priorlims_dict['phi'][1] - self.priorlims_dict['phi'][0])) + jnp.log(jnp.sin(thetaJN)/(costhetaJNmin - costhetaJNmax)) + jnp.log(1./(self.priorlims_dict['psi'][1] - self.priorlims_dict['psi'][0])) + jnp.log(1./(self.priorlims_dict['tcoal'][1] - self.priorlims_dict['tcoal'][0])) + jnp.log(1./(self.priorlims_dict['Phicoal'][1] - self.priorlims_dict['Phicoal'][0])), jnp.NINF)
     
     def _sample_angles(self, size, is_Precessing=False):
         '''
@@ -168,8 +168,8 @@ class PopulationModel(ABC):
                 maxIdx = np.argmax(EoS_use[:,0])
                 EoS_use = EoS_use[:maxIdx,:]
 
-                Lam1 = np.exp(np.interp(m1_src, EoS_use[:,0], np.log(EoS_use[:,1]), right=-jnp.inf))
-                Lam2 = np.exp(np.interp(m2_src, EoS_use[:,0], np.log(EoS_use[:,1]), right=-jnp.inf))
+                Lam1 = np.exp(np.interp(m1_src, EoS_use[:,0], np.log(EoS_use[:,1]), right=np.NINF))
+                Lam2 = np.exp(np.interp(m2_src, EoS_use[:,0], np.log(EoS_use[:,1]), right=np.NINF))
 
             if self.object_type == 'BNS':
                 return {'Lambda1':Lam1, 'Lambda2':Lam2}
@@ -337,7 +337,6 @@ class MassSpinRedshiftIndependent_PopulationModel(PopulationModel):
             return mass_value*rate_value*spin_value*ang_value
         else:
             return mass_value + rate_value + spin_value + ang_value
-
     
     def pop_function_derivative(self, events, uselog=False):
         '''
@@ -359,16 +358,16 @@ class MassSpinRedshiftIndependent_PopulationModel(PopulationModel):
             spin_value = self.spin_function.spin_function(uselog=uselog, **parsspin)
             ang_value  = self.angle_distribution(uselog=uselog, **events)
 
-            mass_der = self.mass_function.mass_function_derivative(**parsmass)*ang_value
-            z_der    = self.rate_function.rate_function_derivative(events['z'])*ang_value
-            spin_der = self.spin_function.spin_function_derivative(**parsspin)*ang_value
+            mass_der = (self.mass_function.mass_function_derivative(**parsmass)*ang_value).reshape(-1, len(events['z']))
+            z_der    = (self.rate_function.rate_function_derivative(events['z'])*ang_value).reshape(-1, len(events['z']))
+            spin_der = (self.spin_function.spin_function_derivative(**parsspin)*ang_value).reshape(-1, len(events['z']))
             
             return np.vstack((mass_der*rate_value*spin_value, z_der*mass_value*spin_value, spin_der*mass_value*rate_value))
         else:
             
-            mass_der = self.mass_function.mass_function_derivative(uselog=True, **parsmass) 
-            z_der    = self.rate_function.rate_function_derivative(events['z'], uselog=True) 
-            spin_der = self.spin_function.spin_function_derivative(uselog=True, **parsspin)
+            mass_der = self.mass_function.mass_function_derivative(uselog=True, **parsmass).reshape(-1, len(events['z']))
+            z_der    = self.rate_function.rate_function_derivative(events['z'], uselog=True).reshape(-1, len(events['z'])) 
+            spin_der = self.spin_function.spin_function_derivative(uselog=True, **parsspin).reshape(-1, len(events['z']))
             
             return np.vstack((mass_der, z_der, spin_der))
     
@@ -404,14 +403,14 @@ class MassSpinRedshiftIndependent_PopulationModel(PopulationModel):
             ang_value  = self.angle_distribution(uselog=uselog, **events)
             pop_value  = mass_value*rate_value*spin_value*ang_value
             
-            mass_hess = self.mass_function.mass_function_hessian(**parsmass)*rate_value*spin_value*ang_value
-            z_hess    = self.rate_function.rate_function_hessian(events['z'])*mass_value*spin_value*ang_value
-            spin_hess = self.spin_function.spin_function_hessian(**parsspin)*mass_value*rate_value*ang_value
+            mass_hess = (self.mass_function.mass_function_hessian(**parsmass)*rate_value*spin_value*ang_value).reshape(mhp, mhp, len(events['z']))
+            z_hess    = (self.rate_function.rate_function_hessian(events['z'])*mass_value*spin_value*ang_value).reshape(rhp, rhp, len(events['z']))
+            spin_hess = (self.spin_function.spin_function_hessian(**parsspin)*mass_value*rate_value*ang_value).reshape(shp, shp, len(events['z']))
             
         else:
-            mass_hess = self.mass_function.mass_function_hessian(uselog=True, **parsmass)
-            z_hess    = self.rate_function.rate_function_hessian(events['z'], uselog=True)
-            spin_hess = self.spin_function.spin_function_hessian(uselog=True, **parsspin)
+            mass_hess = self.mass_function.mass_function_hessian(uselog=True, **parsmass).reshape(mhp, mhp, len(events['z']))
+            z_hess    = self.rate_function.rate_function_hessian(events['z'], uselog=True).reshape(rhp, rhp, len(events['z']))
+            spin_hess = self.spin_function.spin_function_hessian(uselog=True, **parsspin).reshape(shp, shp, len(events['z']))
 
         if not uselog:
             for i in range(Nhyperpar):
@@ -779,7 +778,7 @@ class MassSpinRedshiftIndependent_PopulationModel(PopulationModel):
                 elif Nhyperpar_r == 3:
                     if Nhyperpar_s == 4:
                         funder = lambda m1, m2, z, chi1, chi2, tilt1, tilt2, phiJL, phi12, parm1, parm2, parm3, parm4, parm5, parm6, parz1, parz2, parz3, pars1, pars2, pars3, pars4: self.mass_function.mass_function(m1, m2, parm1, parm2, parm3, parm4, parm5, parm6, uselog=True) + self.rate_function.rate_function(z, parz1, parz2, parz3, uselog=True) + self.spin_function.spin_function(chi1, chi2, tilt1, tilt2, phiJL, phi12, pars1, pars2, pars3, pars4, uselog=True)
-                        parshess = lambda m1, m2, z, chi1, chi2, tilt1, tilt2, phiJL, phi12, parm1, parm2, parm3, parm4, parm5, parm6, parz1, parz2, parz3, pars1, pars2, pars3, pars4: utils.logdet_stabilizecond(FIM_use - jnp.asarray(vmap(hessian(funder, argnums=(0,1,2,3,4,5,6,7,8)), in_axes=(0,0,0,0,0,0,0,0,0,None,None,None,None,None,None,None,None,None,None,None,None))(m1, m2, z, chi1, chi2, tilt1, tilt2, phiJL, phi12, parm1, parm2, parm3, parm4, parm5, parm6, parz1, parz2, parz3, pars1, pars2, pars3, pars4)).T)
+                        parshess = lambda m1, m2, z, chi1, chi2, tilt1, tilt2, phiJL, phi12, parm1, parm2, parm3, parm4, parm5, parm6, parz1, parz2, parz3, pars1, pars2, pars3, pars4: utils.logdet_stabilizecond(FIM_use - jnp.asarray(vmap(hessian(funder, argnums=(0,1,2,3,4,5,6,7,8)), in_axes=(0,0,0,0,0,0,0,0,0,None,None,None,None,None,None,None,None,None,None,None,None,None))(m1, m2, z, chi1, chi2, tilt1, tilt2, phiJL, phi12, parm1, parm2, parm3, parm4, parm5, parm6, parz1, parz2, parz3, pars1, pars2, pars3, pars4)).T)
                         derivs_all = np.squeeze(np.array((hessian(parshess, argnums=(9,10,11,12,13,14,15,16,17,18,19,20,21)))(parsmass['m1_src'], parsmass['m2_src'], events['z'], parsspin['chi1'], parsspin['chi2'], parsspin['tilt1'], parsspin['tilt2'], parsspin['phiJL'], parsspin['phi12'], hyperpars_m[0], hyperpars_m[1], hyperpars_m[2], hyperpars_m[3], hyperpars_m[4], hyperpars_m[5], hyperpars_r[0], hyperpars_r[1], hyperpars_r[2], hyperpars_s[0], hyperpars_s[1], hyperpars_s[2], hyperpars_s[3])))
                     else:
                         raise ValueError('The number of hyperparameters for the spin function is not supported.')
@@ -842,7 +841,8 @@ class MassSpinRedshiftIndependent_PopulationModel(PopulationModel):
                     raise ValueError('The number of hyperparameters for the rate function is not supported.')
             else:
                 raise ValueError('The number of hyperparameters for the mass function is not supported.')
-            
+        Nhyperpar = len(self.hyperpar_dict.keys())
+        derivs_all=derivs_all.reshape(Nhyperpar, Nhyperpar, len(events['z'])) 
         return derivs_all
     
     def pop_function_hessian_termIII(self, events, FIMs, ParNums, ParPrior=None):
@@ -1193,7 +1193,7 @@ class MassSpinRedshiftIndependent_PopulationModel(PopulationModel):
                 elif Nhyperpar_r == 3:
                     if Nhyperpar_s == 4:
                         funder = lambda m1, m2, z, chi1, chi2, tilt1, tilt2, phiJL, phi12, parm1, parm2, parm3, parm4, parm5, parm6, parz1, parz2, parz3, pars1, pars2, pars3, pars4: self.mass_function.mass_function(m1, m2, parm1, parm2, parm3, parm4, parm5, parm6, uselog=True) + self.rate_function.rate_function(z, parz1, parz2, parz3, uselog=True) + self.spin_function.spin_function(chi1, chi2, tilt1, tilt2, phiJL, phi12, pars1, pars2, pars3, pars4, uselog=True)
-                        parshess = lambda m1, m2, z, chi1, chi2, tilt1, tilt2, phiJL, phi12, parm1, parm2, parm3, parm4, parm5, parm6, parz1, parz2, parz3, pars1, pars2, pars3, pars4: utils.invmatrix(FIM_use - jnp.asarray(vmap(hessian(funder, argnums=(0,1,2,3,4,5,6,7,8)), in_axes=(0,0,0,0,0,0,0,0,0,None,None,None,None,None,None,None,None,None,None,None,None))(m1, m2, z, chi1, chi2, tilt1, tilt2, phiJL, phi12, parm1, parm2, parm3, parm4, parm5, parm6, parz1, parz2, parz3, pars1, pars2, pars3, pars4)).T)
+                        parshess = lambda m1, m2, z, chi1, chi2, tilt1, tilt2, phiJL, phi12, parm1, parm2, parm3, parm4, parm5, parm6, parz1, parz2, parz3, pars1, pars2, pars3, pars4: utils.invmatrix(FIM_use - jnp.asarray(vmap(hessian(funder, argnums=(0,1,2,3,4,5,6,7,8)), in_axes=(0,0,0,0,0,0,0,0,0,None,None,None,None,None,None,None,None,None,None,None,None,None))(m1, m2, z, chi1, chi2, tilt1, tilt2, phiJL, phi12, parm1, parm2, parm3, parm4, parm5, parm6, parz1, parz2, parz3, pars1, pars2, pars3, pars4)).T)
                         derivs_all = np.einsum('...ijk,ijk->...i', np.squeeze(np.array((hessian(parshess, argnums=(9,10,11,12,13,14,15,16,17,18,19,20,21)))(parsmass['m1_src'], parsmass['m2_src'], events['z'], parsspin['chi1'], parsspin['chi2'], parsspin['tilt1'], parsspin['tilt2'], parsspin['phiJL'], parsspin['phi12'], hyperpars_m[0], hyperpars_m[1], hyperpars_m[2], hyperpars_m[3], hyperpars_m[4], hyperpars_m[5], hyperpars_r[0], hyperpars_r[1], hyperpars_r[2], hyperpars_s[0], hyperpars_s[1], hyperpars_s[2], hyperpars_s[3]))), FIM_use)
                     else:
                         raise ValueError('The number of hyperparameters for the spin function is not supported.')
@@ -1256,7 +1256,8 @@ class MassSpinRedshiftIndependent_PopulationModel(PopulationModel):
                     raise ValueError('The number of hyperparameters for the rate function is not supported.')
             else:
                 raise ValueError('The number of hyperparameters for the mass function is not supported.')
-            
+        Nhyperpar = len(self.hyperpar_dict.keys())
+        derivs_all=derivs_all.reshape(Nhyperpar, Nhyperpar, len(events['z'])) 
         return derivs_all
     
     def pop_function_hessian_termIV(self, events, FIMs, Pdet_ders, ParNums, ParPrior=None):
@@ -1607,7 +1608,7 @@ class MassSpinRedshiftIndependent_PopulationModel(PopulationModel):
                 elif Nhyperpar_r == 3:
                     if Nhyperpar_s == 4:
                         funder = lambda m1, m2, z, chi1, chi2, tilt1, tilt2, phiJL, phi12, parm1, parm2, parm3, parm4, parm5, parm6, parz1, parz2, parz3, pars1, pars2, pars3, pars4: self.mass_function.mass_function(m1, m2, parm1, parm2, parm3, parm4, parm5, parm6, uselog=True) + self.rate_function.rate_function(z, parz1, parz2, parz3, uselog=True) + self.spin_function.spin_function(chi1, chi2, tilt1, tilt2, phiJL, phi12, pars1, pars2, pars3, pars4, uselog=True)
-                        parshess = lambda m1, m2, z, chi1, chi2, tilt1, tilt2, phiJL, phi12, parm1, parm2, parm3, parm4, parm5, parm6, parz1, parz2, parz3, pars1, pars2, pars3, pars4: jnp.einsum('ij,...ijk->...ik', jnp.asarray(vmap(jacrev(funder, argnums=(0,1,2,3,4,5,6,7,8)), in_axes=(0,0,0,0,0,0,0,0,0,None,None,None,None,None,None,None,None,None,None,None,None))(m1, m2, z, chi1, chi2, tilt1, tilt2, phiJL, phi12, parm1, parm2, parm3, parm4, parm5, parm6, parz1, parz2, parz3, pars1, pars2, pars3, pars4)).T, utils.invmatrix(FIM_use - jnp.asarray(vmap(hessian(funder, argnums=(0,1,2,3,4,5,6,7,8)), in_axes=(0,0,0,0,0,0,0,0,0,None,None,None,None,None,None,None,None,None,None,None,None))(m1, m2, z, chi1, chi2, tilt1, tilt2, phiJL, phi12, parm1, parm2, parm3, parm4, parm5, parm6, parz1, parz2, parz3, pars1, pars2, pars3, pars4)).T))
+                        parshess = lambda m1, m2, z, chi1, chi2, tilt1, tilt2, phiJL, phi12, parm1, parm2, parm3, parm4, parm5, parm6, parz1, parz2, parz3, pars1, pars2, pars3, pars4: jnp.einsum('ij,...ijk->...ik', jnp.asarray(vmap(jacrev(funder, argnums=(0,1,2,3,4,5,6,7,8)), in_axes=(0,0,0,0,0,0,0,0,0,None,None,None,None,None,None,None,None,None,None,None,None,None))(m1, m2, z, chi1, chi2, tilt1, tilt2, phiJL, phi12, parm1, parm2, parm3, parm4, parm5, parm6, parz1, parz2, parz3, pars1, pars2, pars3, pars4)).T, utils.invmatrix(FIM_use - jnp.asarray(vmap(hessian(funder, argnums=(0,1,2,3,4,5,6,7,8)), in_axes=(0,0,0,0,0,0,0,0,0,None,None,None,None,None,None,None,None,None,None,None,None,None))(m1, m2, z, chi1, chi2, tilt1, tilt2, phiJL, phi12, parm1, parm2, parm3, parm4, parm5, parm6, parz1, parz2, parz3, pars1, pars2, pars3, pars4)).T))
                         derivs_all = np.einsum('...ij,ij->...i', np.squeeze(np.array((hessian(parshess, argnums=(9,10,11,12,13,14,15,16,17,18,19,20,21)))(parsmass['m1_src'], parsmass['m2_src'], events['z'], parsspin['chi1'], parsspin['chi2'], parsspin['tilt1'], parsspin['tilt2'], parsspin['phiJL'], parsspin['phi12'], hyperpars_m[0], hyperpars_m[1], hyperpars_m[2], hyperpars_m[3], hyperpars_m[4], hyperpars_m[5], hyperpars_r[0], hyperpars_r[1], hyperpars_r[2], hyperpars_s[0], hyperpars_s[1], hyperpars_s[2], hyperpars_s[3]))), Pdet_ders_use)
                     else:
                         raise ValueError('The number of hyperparameters for the spin function is not supported.')
@@ -1670,7 +1671,8 @@ class MassSpinRedshiftIndependent_PopulationModel(PopulationModel):
                     raise ValueError('The number of hyperparameters for the rate function is not supported.')
             else:
                 raise ValueError('The number of hyperparameters for the mass function is not supported.')
-            
+        Nhyperpar = len(self.hyperpar_dict.keys())
+        derivs_all=derivs_all.reshape(Nhyperpar, Nhyperpar, len(events['z'])) 
         return derivs_all
     
     def pop_function_hessian_termV(self, events, FIMs, ParNums, ParPrior=None):
@@ -2020,7 +2022,7 @@ class MassSpinRedshiftIndependent_PopulationModel(PopulationModel):
                 elif Nhyperpar_r == 3:
                     if Nhyperpar_s == 4:
                         funder = lambda m1, m2, z, chi1, chi2, tilt1, tilt2, phiJL, phi12, parm1, parm2, parm3, parm4, parm5, parm6, parz1, parz2, parz3, pars1, pars2, pars3, pars4: self.mass_function.mass_function(m1, m2, parm1, parm2, parm3, parm4, parm5, parm6, uselog=True) + self.rate_function.rate_function(z, parz1, parz2, parz3, uselog=True) + self.spin_function.spin_function(chi1, chi2, tilt1, tilt2, phiJL, phi12, pars1, pars2, pars3, pars4, uselog=True)
-                        parshess = lambda m1, m2, z, chi1, chi2, tilt1, tilt2, phiJL, phi12, parm1, parm2, parm3, parm4, parm5, parm6, parz1, parz2, parz3, pars1, pars2, pars3, pars4: jnp.einsum('...ij,ij->...i', jnp.einsum('ij,...ijk->...ik', jnp.asarray(vmap(jacrev(funder, argnums=(0,1,2,3,4,5,6,7,8)), in_axes=(0,0,0,0,0,0,0,0,0,None,None,None,None,None,None,None,None,None,None,None,None))(m1, m2, z, chi1, chi2, tilt1, tilt2, phiJL, phi12, parm1, parm2, parm3, parm4, parm5, parm6, parz1, parz2, parz3, pars1, pars2, pars3, pars4)).T, utils.invmatrix(FIM_use - jnp.asarray(vmap(hessian(funder, argnums=(0,1,2,3,4,5,6,7,8)), in_axes=(0,0,0,0,0,0,0,0,0,None,None,None,None,None,None,None,None,None,None,None,None))(m1, m2, z, chi1, chi2, tilt1, tilt2, phiJL, phi12, parm1, parm2, parm3, parm4, parm5, parm6, parz1, parz2, parz3, pars1, pars2, pars3, pars4)).T)), jnp.asarray(vmap(jacrev(funder, argnums=(0,1,2,3,4,5,6,7,8)), in_axes=(0,0,0,0,0,0,0,0,0,None,None,None,None,None,None,None,None,None,None,None,None))(m1, m2, z, chi1, chi2, tilt1, tilt2, phiJL, phi12, parm1, parm2, parm3, parm4, parm5, parm6, parz1, parz2, parz3, pars1, pars2, pars3, pars4)).T)
+                        parshess = lambda m1, m2, z, chi1, chi2, tilt1, tilt2, phiJL, phi12, parm1, parm2, parm3, parm4, parm5, parm6, parz1, parz2, parz3, pars1, pars2, pars3, pars4: jnp.einsum('...ij,ij->...i', jnp.einsum('ij,...ijk->...ik', jnp.asarray(vmap(jacrev(funder, argnums=(0,1,2,3,4,5,6,7,8)), in_axes=(0,0,0,0,0,0,0,0,0,None,None,None,None,None,None,None,None,None,None,None,None,None))(m1, m2, z, chi1, chi2, tilt1, tilt2, phiJL, phi12, parm1, parm2, parm3, parm4, parm5, parm6, parz1, parz2, parz3, pars1, pars2, pars3, pars4)).T, utils.invmatrix(FIM_use - jnp.asarray(vmap(hessian(funder, argnums=(0,1,2,3,4,5,6,7,8)), in_axes=(0,0,0,0,0,0,0,0,0,None,None,None,None,None,None,None,None,None,None,None,None,None))(m1, m2, z, chi1, chi2, tilt1, tilt2, phiJL, phi12, parm1, parm2, parm3, parm4, parm5, parm6, parz1, parz2, parz3, pars1, pars2, pars3, pars4)).T)), jnp.asarray(vmap(jacrev(funder, argnums=(0,1,2,3,4,5,6,7,8)), in_axes=(0,0,0,0,0,0,0,0,0,None,None,None,None,None,None,None,None,None,None,None,None,None))(m1, m2, z, chi1, chi2, tilt1, tilt2, phiJL, phi12, parm1, parm2, parm3, parm4, parm5, parm6, parz1, parz2, parz3, pars1, pars2, pars3, pars4)).T)
                         derivs_all = np.squeeze(np.array((hessian(parshess, argnums=(9,10,11,12,13,14,15,16,17,18,19,20,21)))(parsmass['m1_src'], parsmass['m2_src'], events['z'], parsspin['chi1'], parsspin['chi2'], parsspin['tilt1'], parsspin['tilt2'], parsspin['phiJL'], parsspin['phi12'], hyperpars_m[0], hyperpars_m[1], hyperpars_m[2], hyperpars_m[3], hyperpars_m[4], hyperpars_m[5], hyperpars_r[0], hyperpars_r[1], hyperpars_r[2], hyperpars_s[0], hyperpars_s[1], hyperpars_s[2], hyperpars_s[3])))
                     else:
                         raise ValueError('The number of hyperparameters for the spin function is not supported.')
@@ -2083,8 +2085,10 @@ class MassSpinRedshiftIndependent_PopulationModel(PopulationModel):
                     raise ValueError('The number of hyperparameters for the rate function is not supported.')
             else:
                 raise ValueError('The number of hyperparameters for the mass function is not supported.')
-            
+        Nhyperpar = len(self.hyperpar_dict.keys())
+        derivs_all=derivs_all.reshape(Nhyperpar, Nhyperpar, len(events['z'])) 
         return derivs_all
+        
 
 class MassRedshiftIndependent_PopulationModel(PopulationModel):
     '''
@@ -2250,14 +2254,14 @@ class MassRedshiftIndependent_PopulationModel(PopulationModel):
             rate_value = self.rate_function.rate_function(events['z'], uselog=uselog)
             ang_value  = self.angle_distribution(uselog=uselog, **events)
 
-            mass_der = self.mass_function.mass_function_derivative(**parsmass)*ang_value
-            z_der    = self.rate_function.rate_function_derivative(events['z'])*ang_value
+            mass_der = (self.mass_function.mass_function_derivative(**parsmass)*ang_value).reshape(-1, len(events['z']))
+            z_der    = (self.rate_function.rate_function_derivative(events['z'])*ang_value).reshape(-1, len(events['z']))
             
             return np.vstack((mass_der*rate_value, z_der*mass_value))
         else:
             
-            mass_der = self.mass_function.mass_function_derivative(uselog=True, **parsmass) 
-            z_der    = self.rate_function.rate_function_derivative(events['z'], uselog=True) 
+            mass_der = self.mass_function.mass_function_derivative(uselog=True, **parsmass).reshape(-1, len(events['z']))
+            z_der    = self.rate_function.rate_function_derivative(events['z'], uselog=True).reshape(-1, len(events['z'])) 
             
             return np.vstack((mass_der, z_der))
     
@@ -2449,7 +2453,8 @@ class MassRedshiftIndependent_PopulationModel(PopulationModel):
                 raise ValueError('The number of hyperparameters for the rate function is not supported.')
         else:
             raise ValueError('The number of hyperparameters for the mass function is not supported.')
-            
+        Nhyperpar = len(self.hyperpar_dict.keys())
+        derivs_all=derivs_all.reshape(Nhyperpar, Nhyperpar, len(events['z'])) 
         return derivs_all
     
     def pop_function_hessian_termIII(self, events, FIMs, ParNums, ParPrior=None):
@@ -2586,7 +2591,8 @@ class MassRedshiftIndependent_PopulationModel(PopulationModel):
                 raise ValueError('The number of hyperparameters for the rate function is not supported.')
         else:
             raise ValueError('The number of hyperparameters for the mass function is not supported.')
-            
+        Nhyperpar = len(self.hyperpar_dict.keys())
+        derivs_all=derivs_all.reshape(Nhyperpar, Nhyperpar, len(events['z'])) 
         return derivs_all
     
     def pop_function_hessian_termIV(self, events, FIMs, Pdet_ders, ParNums, ParPrior=None):
@@ -2722,7 +2728,8 @@ class MassRedshiftIndependent_PopulationModel(PopulationModel):
                 raise ValueError('The number of hyperparameters for the rate function is not supported.')
         else:
             raise ValueError('The number of hyperparameters for the mass function is not supported.')
-            
+        Nhyperpar = len(self.hyperpar_dict.keys())
+        derivs_all=derivs_all.reshape(Nhyperpar, Nhyperpar, len(events['z'])) 
         return derivs_all
     
     def pop_function_hessian_termV(self, events, FIMs, ParNums, ParPrior=None):
@@ -2857,7 +2864,8 @@ class MassRedshiftIndependent_PopulationModel(PopulationModel):
                 raise ValueError('The number of hyperparameters for the rate function is not supported.')
         else:
             raise ValueError('The number of hyperparameters for the mass function is not supported.')
-            
+        Nhyperpar = len(self.hyperpar_dict.keys())
+        derivs_all=derivs_all.reshape(Nhyperpar, Nhyperpar, len(events['z'])) 
         return derivs_all
 
 class MassOnly_PopulationModel(PopulationModel):
@@ -3120,7 +3128,8 @@ class MassOnly_PopulationModel(PopulationModel):
             derivs_all = np.squeeze(np.array((hessian(parshess, argnums=(2,3,4,5,6,7,8,9,10,11,12)))(parsmass['m1_src'], parsmass['m2_src'], hyperpars_m[0], hyperpars_m[1], hyperpars_m[2], hyperpars_m[3], hyperpars_m[4], hyperpars_m[5], hyperpars_m[6], hyperpars_m[7], hyperpars_m[8], hyperpars_m[9], hyperpars_m[10])))
         else:
             raise ValueError('The number of hyperparameters for the mass function is not supported.')
-            
+        Nhyperpar = len(self.hyperpar_dict.keys())
+        derivs_all=derivs_all.reshape(Nhyperpar, Nhyperpar, len(events['z'])) 
         return derivs_all
     
     def pop_function_hessian_termIII(self, events, FIMs, ParNums, ParPrior=None):
@@ -3187,7 +3196,8 @@ class MassOnly_PopulationModel(PopulationModel):
             derivs_all = np.einsum('...ijk,ijk->...i', np.squeeze(np.array((hessian(parshess, argnums=(2,3,4,5,6,7,8,9,10,11,12)))(parsmass['m1_src'], parsmass['m2_src'], hyperpars_m[0], hyperpars_m[1], hyperpars_m[2], hyperpars_m[3], hyperpars_m[4], hyperpars_m[5], hyperpars_m[6], hyperpars_m[7], hyperpars_m[8], hyperpars_m[9], hyperpars_m[10]))), FIM_use)
         else:
             raise ValueError('The number of hyperparameters for the mass function is not supported.')
-            
+        Nhyperpar = len(self.hyperpar_dict.keys())
+        derivs_all=derivs_all.reshape(Nhyperpar, Nhyperpar, len(events['z'])) 
         return derivs_all
     
     def pop_function_hessian_termIV(self, events, FIMs, Pdet_ders, ParNums, ParPrior=None):
@@ -3254,7 +3264,8 @@ class MassOnly_PopulationModel(PopulationModel):
             derivs_all = np.einsum('...ij,ij->...i', np.squeeze(np.array((hessian(parshess, argnums=(2,3,4,5,6,7,8,9,10,11,12)))(parsmass['m1_src'], parsmass['m2_src'], hyperpars_m[0], hyperpars_m[1], hyperpars_m[2], hyperpars_m[3], hyperpars_m[4], hyperpars_m[5], hyperpars_m[6], hyperpars_m[7], hyperpars_m[8], hyperpars_m[9], hyperpars_m[10]))), Pdet_ders_use)
         else:
             raise ValueError('The number of hyperparameters for the mass function is not supported.')
-            
+        Nhyperpar = len(self.hyperpar_dict.keys())
+        derivs_all=derivs_all.reshape(Nhyperpar, Nhyperpar, len(events['z'])) 
         return derivs_all
     
     def pop_function_hessian_termV(self, events, FIMs, ParNums, ParPrior=None):
@@ -3320,5 +3331,6 @@ class MassOnly_PopulationModel(PopulationModel):
             derivs_all = np.squeeze(np.array((hessian(parshess, argnums=(2,3,4,5,6,7,8,9,10,11,12)))(parsmass['m1_src'], parsmass['m2_src'], hyperpars_m[0], hyperpars_m[1], hyperpars_m[2], hyperpars_m[3], hyperpars_m[4], hyperpars_m[5], hyperpars_m[6], hyperpars_m[7], hyperpars_m[8], hyperpars_m[9], hyperpars_m[10])))
         else:
             raise ValueError('The number of hyperparameters for the mass function is not supported.')
-            
+        Nhyperpar = len(self.hyperpar_dict.keys())
+        derivs_all=derivs_all.reshape(Nhyperpar, Nhyperpar, len(events['z'])) 
         return derivs_all
