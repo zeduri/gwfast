@@ -60,7 +60,7 @@ RESPATH = os.path.join(SCRIPT_DIR, PACKAGE_PARENT, 'results' )
 
 # shortcuts for wf model names; have to be used in input
 wf_models_dict = {'IMRPhenomD':IMRPhenomD(), 
-                  'IMRPhenomHM':IMRPhenomHM(), 
+                  'IMRPhenomHM':IMRPhenomHM(),
                   'tf2':TaylorF2_RestrictedPN(is_tidal=False, use_3p5PN_SpinHO=True),
                   'IMRPhenomD_NRTidalv2': IMRPhenomD_NRTidalv2(),
                   'tf2_tidal':TaylorF2_RestrictedPN(is_tidal=True, use_3p5PN_SpinHO=True),
@@ -649,6 +649,10 @@ def main(idx, FLAGS):
         
         if FLAGS.wf_model.split('-')[0] !=  'LAL':
             wf_model = wf_models_dict[ FLAGS.wf_model]
+            
+            if FLAGS.devPN is not None and FLAGS.wf_model.startswith('IMRPhenomHM'):
+                wf_model = IMRPhenomHM(devPN=FLAGS.devPN)
+    
             wf_model_name =  type(wf_model).__name__
         else:
             is_tidal, is_prec, is_HM, is_ecc = False, False, False, False
@@ -802,6 +806,7 @@ parser = argparse.ArgumentParser(prog = 'calculate_forecasts_from_catalog.py', d
 parser.add_argument("--fname_obs", default='', type=str, required=True, help='Name of the file containing the catalog, without the extension ``h5``.')
 parser.add_argument("--fout", default='test_gwfast', type=str, required=True, help='Path to output folder, which has to exist before the script is launched.')
 parser.add_argument("--wf_model",  default='tf2', type=str, required=False, help='Name of the waveform model.')
+parser.add_argument("--devPN", default=None, type=int, required=False, help="PN deviation order (optional). If not None, modifies the waveform model.")
 parser.add_argument("--batch_size", default=1, type=int, required=False, help='Size of the batch to be computed in vectorized form on each process.')
 parser.add_argument("--npools", default=1, type=int, required=False, help='Number of parallel processes.')
 parser.add_argument("--snr_th", default=12., type=float, required=False, help='Threshold value for the SNR to consider the event detectable. FIMs are computed only for events with SNR exceeding this value.')

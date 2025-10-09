@@ -111,10 +111,13 @@ class Observations(object):
     
             in_time = time.time()
 
-            snr = tqdm_pathos.map(network.SNR_netFast, data_new, n_cpus=self.CPUs)
+            snr = tqdm_pathos.map(network.SNR, data_new, n_cpus=self.CPUs)
             print('\nDone. Total execution time: %.2fs' % (time.time() - in_time))
             snr = np.array(snr)
             theta_samples['snr']=snr
+            mask = snr > self.snr_th
+            for key in theta_samples.keys():
+                theta_samples[key] = theta_samples[key][mask]
             # Save all theta_samples
             save_theta_samples.append(theta_samples)
             
@@ -124,10 +127,17 @@ class Observations(object):
             
             print(f"Total number of generated events: {total_events}")
             print(f"Events with SNR> {self.snr_th}: {events_over_th}")
+            
         result=save_theta_samples
         arrays_dict = {}
         for key in result[0].keys():
             arrays_dict[key] = np.concatenate([d[key] for d in result])
+
+        snr_filtered = arrays_dict['snr']
+        with open("snr_filtered.txt", "w") as f:
+            for val in snr_filtered:
+                f.write(f"{val}\n")
+
         return arrays_dict
 
 
@@ -250,8 +260,8 @@ def main():
 
  
     
-    #result=myObs.generate_events_parallel_snr_th(network)
-    result=myObs.generate_events_parallel(network)
+    result=myObs.generate_events_parallel_snr_th(network)
+    #result=myObs.generate_events_parallel(network)
     save_data(os.path.join(out_path,'pdraw.h5'), result)
 
       
@@ -268,6 +278,7 @@ def main():
     else:
         idxf_gwfast=len(result['Mc'])
     wf_model=repr(config.wf_model)
+    devPN =config.devPN
     lalargs=config.lalargs
     psds=config.psds
     net=config.net
@@ -321,6 +332,7 @@ def main():
         file.write(f'fname_obs="{fname_obs}"\n')
         file.write(f'fout="{fout_gwfast}"\n')
         file.write(f'wf_model="{wf_model}"\n')
+        file.write(f'devPN={config.waveform.devPN}\n')
         file.write(f"lalargs={lalargs}\n")
         file.write(f"net={net}\n")
         file.write(f"psds={psds}\n")
@@ -363,6 +375,7 @@ def main():
         file.write(f'  --fname_obs={fname_obs} \\\n')
         file.write(f'  --fout={fout_gwfast} \\\n')
         file.write(f'  --wf_model={wf_model} \\\n')
+        file.write(f'  --devPN={config.waveform.devPN} \\\n')
         file.write(f'  --lalargs {lalargs} \\\n')
         file.write(f'  --snr_th={snr_th_FIM} \\\n')
         file.write(f'  --batch_size={config.batch_size_gwfast} \\\n')
@@ -414,6 +427,7 @@ def main():
     mass_model=repr(config.mass_model)
     rate_model=repr(config.rate_model)
     spin_model=repr(config.spin_model)
+    delta_model=repr(config.delta_model)
     POPmodel=repr(config.pop_model_rec)
     fout_popfisher=out_path+'PopFisher'
     fname_evSNRs=fout_gwfast+f'/snrs_{config.idxin_popfisher}_to_{idxf_popfisher}.txt' 
@@ -491,6 +505,7 @@ def main():
         file.write(f"POPmodel={POPmodel}\n")
         file.write(f"rate_model={rate_model}\n")
         file.write(f"spin_model={spin_model}\n")
+        file.write(f"delta_model={delta_model}\n")
     
         if config.mass_model_params_names:
             mass_model_params_names = ' '.join(config.mass_model_params_names)
@@ -515,6 +530,14 @@ def main():
         if config.spin_model_params_values:
             spin_model_params_values = ' '.join(map(str, config.spin_model_params_values))
             file.write(f"spin_model_params_values=\"{spin_model_params_values}\"\n")
+
+        if config.delta_model_params_names:
+            delta_model_params_names = ' '.join(config.delta_model_params_names)
+            file.write(f"delta_model_params_names=\"{delta_model_params_names}\"\n")
+    
+        if config.delta_model_params_values:
+            delta_model_params_values = ' '.join(map(str, config.delta_model_params_values))
+            file.write(f"delta_model_params_values=\"{delta_model_params_values}\"\n")
     
         if config.prior_limits_params_names:
             prior_limits_params_names = ' '.join(config.prior_limits_params_names)
@@ -567,6 +590,13 @@ def main():
             file.write(f"  --spin_model_params_names {' '.join(config.spin_model_params_names)} \\\n")
         if config.spin_model_params_values:
             file.write(f"  --spin_model_params_values {' '.join(map(str, config.spin_model_params_values))} \\\n")
+        
+        file.write(f"  --delta_model={delta_model} \\\n")
+        
+        if config.delta_model_params_names:
+            file.write(f"  --delta_model_params_names {' '.join(config.delta_model_params_names)} \\\n")
+        if config.delta_model_params_values:
+            file.write(f"  --delta_model_params_values {' '.join(map(str, config.delta_model_params_values))} \\\n")
         
         if config.prior_limits_params_names:
             file.write(f"  --prior_limits_params_names {' '.join(config.prior_limits_params_names)} \\\n")

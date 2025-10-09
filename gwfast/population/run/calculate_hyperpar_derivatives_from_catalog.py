@@ -15,10 +15,12 @@ SCRIPT_DIR = os.path.dirname(os.path.realpath(os.path.join(os.getcwd())))
 #sys.path.append(os.path.normpath(os.path.join(SCRIPT_DIR,'..')))
 sys.path.append(SCRIPT_DIR)
 import POPutils as utils
-from POPmodels import MassSpinRedshiftIndependent_PopulationModel,MassOnly_PopulationModel,MassRedshiftIndependent_PopulationModel
+from POPmodels import MassSpinRedshiftDeltaIndependent_PopulationModel,MassSpinRedshiftIndependent_PopulationModel,MassOnly_PopulationModel,MassRedshiftIndependent_PopulationModel
 from popdistributions.massdistribution import TruncatedPowerLaw_modsmooth_MassDistribution, PowerLawPlusPeak_modsmooth_MassDistribution
 from popdistributions.ratedistribution import PowerLaw_RateDistribution, MadauDickinson_RateDistribution, MadauDickinsonPLTimeDelta_RateDistribution
 from popdistributions.spindistribution import DefaultPrecessing_SpinDistribution, SameFlatNonPrecessing_SpinDistribution, FlatNonPrecessing_SpinDistribution, GaussNonPrecessing_SpinDistribution
+from popdistributions.deltadistribution import Gauss_DeltaDistribution
+#import popdistributions.deltadistribution
 
 #####################################################################################
 # GLOBALS
@@ -29,9 +31,13 @@ clight = 2.99792458e5 # km/s
 #RESPATH = os.path.join(SCRIPT_DIR, PACKAGE_PARENT, 'results' )
 PNUMS_FIM_PREC_ROT    = {'m1_src':0, 'm2_src':1, 'z':2, 'theta':3, 'phi':4, 'thetaJN':5, 'psi':6, 'tcoal':7, 'Phicoal':8, 'chi1':9,  'chi2':10, 'tilt1':11, 'tilt2':12, 'phiJL':13, 'phi12':14}
 PNUMS_FIM_ALIGNED_ROT = {'m1_src':0, 'm2_src':1, 'z':2, 'theta':3, 'phi':4, 'iota':5, 'psi':6, 'tcoal':7, 'Phicoal':8, 'chi1z':9,  'chi2z':10}
+PNUMS_FIM_ALIGNED_ROT_PN = {'m1_src':0, 'm2_src':1, 'z':2, 'theta':3, 'phi':4, 'iota':5, 'psi':6, 'tcoal':7, 'Phicoal':8, 'chi1z':9,  'chi2z':10, 'deltaPN':11}
+
 
 PNUMS_FIM_PREC_OR    = {'Mc':0, 'eta':1, 'dL':2, 'theta':3, 'phi':4, 'thetaJN':5, 'psi':6, 'tcoal':7, 'Phicoal':8, 'chi1':9,  'chi2':10, 'tilt1':11, 'tilt2':12, 'phiJL':13, 'phi12':14}
 PNUMS_FIM_ALIGNED_OR = {'Mc':0, 'eta':1, 'dL':2, 'theta':3, 'phi':4, 'iota':5, 'psi':6, 'tcoal':7, 'Phicoal':8, 'chi1z':9,  'chi2z':10}
+PNUMS_FIM_ALIGNED_OR_PN = {'Mc':0, 'eta':1, 'dL':2, 'theta':3, 'phi':4, 'iota':5, 'psi':6, 'tcoal':7, 'Phicoal':8, 'chi1z':9,  'chi2z':10, 'deltaPN':11}
+
 
 # shortcuts for distribution functions names; have to be used in input
 mass_models_dict = {
@@ -49,7 +55,10 @@ spin_models_dict = {'Default': DefaultPrecessing_SpinDistribution(),
                     'FlatNonPrecessing': FlatNonPrecessing_SpinDistribution(),
                     'GaussNonPrecessing': GaussNonPrecessing_SpinDistribution(),
                     }
-POPmodel_dict = {'MassSpinRedshiftIndependent': MassSpinRedshiftIndependent_PopulationModel,
+delta_models_dict = {'Gauss': Gauss_DeltaDistribution()}
+
+POPmodel_dict = {'MassSpinRedshiftDeltaIndependent': MassSpinRedshiftDeltaIndependent_PopulationModel,
+                'MassSpinRedshiftIndependent': MassSpinRedshiftIndependent_PopulationModel,
                 'MassRedshiftIndependent': MassRedshiftIndependent_PopulationModel,
                 'MassOnly': MassOnly_PopulationModel,
                     }
@@ -377,6 +386,8 @@ def main(idx, FLAGS):
         print('------------------------\n')
         print('------------ Spin distribution used:  ------------\n%s' %str(FLAGS.spin_model))
         print('------------------------\n')
+        print('------------ Delta distribution used:  ------------\n%s' %str(FLAGS.delta_model))
+        print('------------------------\n')
         print('------------ Model used:  ------------\n%s' %str(FLAGS.POPmodel))
         print('------------------------\n')
         
@@ -392,10 +403,17 @@ def main(idx, FLAGS):
         if FLAGS.spin_model_params_names:
             for i,par in enumerate(FLAGS.spin_model_params_names):
                 SPIN_model.update_hyperparameters({par: FLAGS.spin_model_params_values[i]})
+        DELTA_model = delta_models_dict[FLAGS.delta_model]
+        if FLAGS.delta_model_params_names:
+            for i,par in enumerate(FLAGS.delta_model_params_names):
+                DELTA_model.update_hyperparameters({par: FLAGS.delta_model_params_values[i]})
         
         if len(SPIN_model.par_list) == 2:
             parnums    = PNUMS_FIM_ALIGNED_ROT
             parnums_or = PNUMS_FIM_ALIGNED_OR
+            if FLAGS.POPmodel=='MassSpinRedshiftDeltaIndependent':
+                parnums = PNUMS_FIM_ALIGNED_ROT_PN
+                parnums_or = PNUMS_FIM_ALIGNED_OR_PN
         elif len(SPIN_model.par_list) == 6:
             parnums    = PNUMS_FIM_PREC_ROT
             parnums_or = PNUMS_FIM_PREC_OR
@@ -411,6 +429,12 @@ def main(idx, FLAGS):
             POPmodel = popmodel(mass_function=MASS_model, 
                                 rate_function=RATE_model, 
                                 spin_function=SPIN_model,
+                                verbose=True)
+        elif FLAGS.POPmodel=='MassSpinRedshiftDeltaIndependent':
+            POPmodel = popmodel(mass_function=MASS_model, 
+                                rate_function=RATE_model, 
+                                spin_function=SPIN_model,
+                                delta_function=DELTA_model,
                                 verbose=True)
         
     
@@ -511,8 +535,11 @@ parser.add_argument("--rate_model_params_values", nargs='+', default=[ ], type=f
 parser.add_argument("--spin_model",  default='GaussNonPrecessing', type=str, required=False, help='Name of the spin distribution model.')
 parser.add_argument("--spin_model_params_names", nargs='+', default=[ ], type=str, required=False, help='Hyperparameters names of the spin distribution model, separated by *single spacing*.')
 parser.add_argument("--spin_model_params_values", nargs='+', default=[ ], type=float, required=False, help='Hyperparameters values of the spin distribution model, separated by *single spacing*.')
+parser.add_argument("--delta_model",  default='Gauss', type=str, required=False, help='Name of the delta PN distribution model.')
+parser.add_argument("--delta_model_params_names", nargs='+', default=[ ], type=str, required=False, help='Hyperparameters names of the delta distribution model, separated by *single spacing*.')
+parser.add_argument("--delta_model_params_values", nargs='+', default=[ ], type=float, required=False, help='Hyperparameters values of the delta distribution model, separated by *single spacing*.')
 
-parser.add_argument("--POPmodel",  default='MassSpinRedshiftIndependent_PopulationModel', type=str, required=False, help='Name of the spin distribution model.')
+parser.add_argument("--POPmodel",  default='MassSpinRedshiftDeltaIndependent_PopulationModel', type=str, required=False, help='Name of the pop distribution model.')
 
 
 parser.add_argument("--prior_limits_params_names", nargs='+', default=[ ], type=str, required=False, help='Names of the parameters where priors limits need to be added to the single-event-fisher, separated by *single spacing*.')
@@ -535,6 +562,18 @@ if __name__ =='__main__':
     FLAGS = parser.parse_args()
         
     print('Input arguments: %s' %str(FLAGS))
+    print('\n------------ Mass distribution used:  ------------\n%s' %str(FLAGS.mass_model))
+    print('------------------------\n')
+    print('------------ Rate distribution used:  ------------\n%s' %str(FLAGS.rate_model))
+    print('------------------------\n')
+    print('------------ Spin distribution used:  ------------\n%s' %str(FLAGS.spin_model))
+    print('------------------------\n')
+    print('------------ Delta distribution used:  ------------\n%s' %str(FLAGS.delta_model))
+    print('------------------------\n')
+    print('------------ Model used:  ------------\n%s' %str(FLAGS.POPmodel))
+    print('------------------------\n')
+
+
     
     ti =  time.time()
     
@@ -630,10 +669,18 @@ if __name__ =='__main__':
     if FLAGS.spin_model_params_names:
         for i,par in enumerate(FLAGS.spin_model_params_names):
             SPIN_model.update_hyperparameters({par: FLAGS.spin_model_params_values[i]})
+    DELTA_model = delta_models_dict[FLAGS.delta_model]
+    if FLAGS.delta_model_params_names:
+        for i,par in enumerate(FLAGS.delta_model_params_names):
+            DELTA_model.update_hyperparameters({par: FLAGS.delta_model_params_values[i]})
     
     if len(SPIN_model.par_list) == 2:
         parnums    = PNUMS_FIM_ALIGNED_ROT
         parnums_or = PNUMS_FIM_ALIGNED_OR
+        if FLAGS.POPmodel=='MassSpinRedshiftDeltaIndependent':
+                parnums = PNUMS_FIM_ALIGNED_ROT_PN
+                parnums_or = PNUMS_FIM_ALIGNED_OR_PN
+            
     elif len(SPIN_model.par_list) == 6:
         parnums    = PNUMS_FIM_PREC_ROT
         parnums_or = PNUMS_FIM_PREC_OR
@@ -648,6 +695,12 @@ if __name__ =='__main__':
         POPmodel = popmodel(mass_function=MASS_model, 
                             rate_function=RATE_model, 
                             spin_function=SPIN_model,
+                            verbose=True)
+    elif FLAGS.POPmodel=='MassSpinRedshiftDeltaIndependent':
+        POPmodel = popmodel(mass_function=MASS_model, 
+                            rate_function=RATE_model, 
+                            spin_function=SPIN_model,
+                            delta_function=DELTA_model,
                             verbose=True)
 
 

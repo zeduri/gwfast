@@ -12,8 +12,9 @@ from astropy.cosmology import Planck18 as cosmo
 
 from abc import ABC, abstractmethod
 
-from gwfast.population import POPutils as utils
-from gwfast.population import Globals as glob
+
+import gwfast.population.POPutils as utils
+import gwfast.population.Globals as glob
 #import POPutils as utils
 
 import h5py
@@ -159,7 +160,7 @@ class PowerLaw_RateDistribution(RateDistribution):
 
         zgrid = jnp.geomspace(self.priorlims_dict['z'][0], self.priorlims_dict['z'][1], 1000)
 
-        res = np.trapezoid(R0*((1.+zgrid)**(k-1))*jnp.interp(zgrid, zGridGLOB, dVcomGridGLOB), zgrid)
+        res = np.trapz(R0*((1.+zgrid)**(k-1))*jnp.interp(zgrid, zGridGLOB, dVcomGridGLOB), zgrid)
 
         return np.ceil(res).astype(int)
 
@@ -316,7 +317,7 @@ class MadauDickinson_RateDistribution(RateDistribution):
 
         zgrid = jnp.geomspace(self.priorlims_dict['z'][0], self.priorlims_dict['z'][1], 1000)
 
-        res = np.trapezoid(self._MadauDickinson_profile_z0norm(zgrid, alpha, beta, zp, R0)*jnp.interp(zgrid, zGridGLOB, dVcomGridGLOB)/(1.+zgrid), zgrid) 
+        res = np.trapz(self._MadauDickinson_profile_z0norm(zgrid, alpha, beta, zp, R0)*jnp.interp(zgrid, zGridGLOB, dVcomGridGLOB)/(1.+zgrid), zgrid) 
 
         return np.ceil(res).astype(int)
     
@@ -535,7 +536,7 @@ class MadauDickinsonPLTimeDelta_RateDistribution(RateDistribution):
 
         zgrid = jnp.geomspace(self.priorlims_dict['z'][0], self.priorlims_dict['z'][1], 1000)
 
-        res = np.trapezoid(self._convolved_MadauDickinson_profile_z0norm(zgrid, alpha, beta, zp, alpha_tau, tau_min, R0, norm_z0=True)*jnp.interp(zgrid, zGridGLOB, dVcomGridGLOB), zgrid) 
+        res = np.trapz(self._convolved_MadauDickinson_profile_z0norm(zgrid, alpha, beta, zp, alpha_tau, tau_min, R0, norm_z0=True)*jnp.interp(zgrid, zGridGLOB, dVcomGridGLOB), zgrid) 
 
         return np.ceil(res).astype(int)
     

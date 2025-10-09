@@ -3,8 +3,8 @@ from scipy.special import erfc
 import matplotlib.pyplot as plt
 
 
-from POPmodels import *
-from POPutils import open_h5py,open_catalog,load_SNRders,print_diagonal_elements
+from gwfast.population.POPmodels import *
+from gwfast.population.POPutils import open_h5py,open_catalog,load_SNRders,print_diagonal_elements
 
 
 
