@@ -21,6 +21,31 @@ import h5py
 from scipy.optimize import root
 
 
+def _ensure_derivative_shape(raw):
+    arr = np.asarray(raw)
+    if arr.ndim == 1:
+        return arr[:, None]
+    if arr.ndim == 2:
+        if arr.shape[1] == 2 and arr.shape[0] != 2:
+            return arr.T
+        elif arr.shape[0] == 2:
+            return arr
+        else:
+            return arr.T
+    raise ValueError("Derivative has unexpected ndim: %d" % arr.ndim)
+
+def _ensure_hessian_shape(raw):
+    arr = np.asarray(raw)
+    if arr.ndim == 2:
+        return arr[:, :, None]
+    if arr.ndim == 3:
+        # if shape is (Nevents,2,2) -> transpose
+        if arr.shape[1] == 2 and arr.shape[2] == 2 and arr.shape[0] != 2:
+            return np.transpose(arr, (1,2,0))
+        return arr
+    raise ValueError("Hessian has unexpected ndim: %d" % arr.ndim)
+
+
 class DeltaDistribution(ABC):
     '''
     Abstract class to compute deltaPN distributions.
@@ -151,8 +176,8 @@ class Gauss_DeltaDistribution(DeltaDistribution):
         goodsamples = self._isin_prior_range('deltaPN', deltaPN)
         deltagrid = jnp.geomspace(self.priorlims_dict['deltaPN'][0], self.priorlims_dict['deltaPN'][1], 1000)
 
-        distr = jsc.stats.norm.pdf(deltaPN, loc = mu_c, scale = sigma_c)
-        #distr = utils.gaussian_norm(deltaPN, mu_c, sigma_c)
+        #distr = jsc.stats.norm.pdf(deltaPN, loc = mu_c, scale = sigma_c)
+        distr = utils.gaussian_norm(deltaPN, mu_c, sigma_c)
         logdistr = jsc.stats.norm.logpdf(deltaPN, loc = mu_c, scale = sigma_c)
 
         if not uselog:
@@ -177,7 +202,7 @@ class Gauss_DeltaDistribution(DeltaDistribution):
         
     def delta_function_derivative(self, deltaPN, mu_PN=None, sigma_PN=None, uselog=False):
         '''
-        First derivative with respect to the hyperparameters of the deltaPN1 function.
+        First derivative with respect to the hyperparameters of the deltaPN function.
         
         :param array deltaPN: delta PN.
         :param float, optional mu_PN, sigma_PN: loc and sigma of the delta distribution.
@@ -192,17 +217,16 @@ class Gauss_DeltaDistribution(DeltaDistribution):
 
         funder = lambda deltaPN, mu_c, sigma_c: self.delta_function(deltaPN, mu_c, sigma_c, uselog=uselog)
 
-        derivs_all = np.squeeze(np.asarray(jacrev(funder, argnums=(1,2))(deltaPN, jnp.array([mu_c]), jnp.array([sigma_c]))))
+        raw = np.squeeze(np.asarray(jacrev(funder, argnums=(1,2))(deltaPN, jnp.array([mu_c]), jnp.array([sigma_c]))))
 
-
-        return derivs_all[np.newaxis,:]
-        #return derivs_all
+        derivs_all = _ensure_derivative_shape(np.squeeze(np.asarray(raw)))
+        return derivs_all 
     
     def delta_function_hessian(self, deltaPN, mu_PN=None, sigma_PN=None, uselog=False):
         '''
         Hessian with respect to the hyperparameters of the deltaPN function.
         
-        :param array deltaPN1: Redshift.
+        :param array deltaPN1: deltaPN.
         :param float, optional mu_PN, sigma_PN: loc and scale of the deltaPN distribution.
         :param bool uselog: Boolean specifying whether to use the probability or log-probability, defaults to False.
         
@@ -215,6 +239,7 @@ class Gauss_DeltaDistribution(DeltaDistribution):
         
         funder = lambda deltaPN, mu_c, sigma_c: self.delta_function(deltaPN, mu_c, sigma_c, uselog=uselog)
 
-        derivs_all = np.squeeze(np.asarray(hessian(funder, argnums=(1,2))(deltaPN, jnp.array([mu_c]), jnp.array([sigma_c]))))
-        
-        return derivs_all[np.newaxis,np.newaxis,:]
+        rawH = np.squeeze(np.asarray(hessian(funder, argnums=(1,2))(deltaPN, jnp.array([mu_c]), jnp.array([sigma_c]))))
+
+        hess_all = _ensure_hessian_shape(np.squeeze(np.asarray(rawH)))
+        return hess_all 

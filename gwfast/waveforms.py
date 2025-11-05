@@ -725,7 +725,7 @@ class TaylorF2_RestrictedPN(WaveFormModel):
     
     """
     
-    def __init__(self, fHigh=None, is_tidal=False, use_3p5PN_SpinHO=False, phiref_vlso=False, is_eccentric=False, fRef_ecc=None, which_ISCO='Schw', use_QuadMonTid=False, **kwargs):
+    def __init__(self, devPN=None, fHigh=None, is_tidal=False, use_3p5PN_SpinHO=False, phiref_vlso=False, is_eccentric=False, fRef_ecc=None, which_ISCO='Schw', use_QuadMonTid=False, **kwargs):
         """
         Constructor method
         """
@@ -740,6 +740,20 @@ class TaylorF2_RestrictedPN(WaveFormModel):
         self.fRef_ecc=fRef_ecc
         self.which_ISCO=which_ISCO
         self.use_QuadMonTid = use_QuadMonTid
+        self.devPN = devPN
+
+        pn_labels = {
+            0: 'zero',
+            2: 'two',
+            3: 'three',
+            4: 'four',
+            5: 'five',
+            6: 'six',
+            7: 'seven'
+            }
+        if self.devPN is not None and self.devPN not in pn_labels:
+            print('Adding the ', self.devPN/2, 'pPN order deviation')
+            
         super().__init__(objectT, fHigh, is_tidal=is_tidal, is_eccentric=is_eccentric, is_holomorphic=True, **kwargs)
     
     def Phi(self, f, **kwargs):
@@ -813,6 +827,32 @@ class TaylorF2_RestrictedPN(WaveFormModel):
         else:
             TF2coeffs['seven'] = 77096675.*np.pi/254016. + 378515.*np.pi*eta/1512.- 74045.*np.pi*eta2/756. + (-25150083775./3048192. + 10566655595.*eta/762048. - 1042165.*eta2/3024. + 5345.*eta2*eta/36.)*chi_s + Seta*((-25150083775./3048192. + 26804935.*eta/6048. - 1985.*eta2/48.)*chi_a)
 
+
+            pn_labels = {
+            0: 'zero',
+            2: 'two',
+            3: 'three',
+            4: 'four',
+            5: 'five',
+            6: 'six',
+            7: 'seven'
+            }
+
+            if self.devPN is None:
+                pass
+            elif self.devPN is not None:
+                if 'deltaPN' not in kwargs:
+                    raise ValueError('Expected deltaPN parameter in the event catalog!')
+                elif self.devPN not in pn_labels:
+                    TF2coeffs['higher'] = kwargs['deltaPN']
+                else:
+                    key = pn_labels[self.devPN]
+                    TF2coeffs[key] = (1 + kwargs['deltaPN']) * TF2coeffs[key]
+                    if self.devPN == 5:
+                        TF2coeffs['five_log'] = (1 + kwargs['deltaPN']) * TF2coeffs['five_log']
+                    elif self.devPN == 6:
+                        TF2coeffs['six_log'] = (1 + kwargs['deltaPN']) * TF2coeffs['six_log']
+
         if self.is_eccentric:
             # These are the eccentricity dependent coefficients up to 3 PN order, in the low-eccentricity limit, from arXiv:1605.00304
             ecc = kwargs['ecc']
@@ -860,6 +900,9 @@ class TaylorF2_RestrictedPN(WaveFormModel):
             phi_Tidal = 0.
         
         phase = TF2OverallAmpl*(TF2coeffs['zero'] + TF2coeffs['one']*v + TF2coeffs['two']*v*v + TF2coeffs['three']*v**3 + TF2coeffs['four']*v**4 + (TF2coeffs['five'] + TF2coeffs['five_log']*np.log(v))*v**5 + (TF2coeffs['six'] + TF2coeffs['six_log']*np.log(v))*v**6 + TF2coeffs['seven']*v**7 + phi_Tidal + phi_Ecc)/(v**5.)
+
+        if self.devPN is not None and self.devPN not in pn_labels:
+            phase = TF2OverallAmpl*(TF2coeffs['zero'] + TF2coeffs['one']*v + TF2coeffs['two']*v*v + TF2coeffs['three']*v**3 + TF2coeffs['four']*v**4 + (TF2coeffs['five'] + TF2coeffs['five_log']*np.log(v))*v**5 + (TF2coeffs['six'] + TF2coeffs['six_log']*np.log(v))*v**6 + TF2coeffs['seven']*v**7 + TF2coeffs['higher']*v**self.devPN + phi_Tidal + phi_Ecc)/(v**5.)
             
         return phase + phiR - np.pi*0.25
 
@@ -972,7 +1015,7 @@ class IMRPhenomD(WaveFormModel):
         
     """
     # All is taken from LALSimulation and arXiv:1508.07250, arXiv:1508.07253
-    def __init__(self, fRef=None, **kwargs):
+    def __init__(self, devPN=None, fRef=None, **kwargs):
         """
         Constructor method
         """
@@ -984,12 +1027,21 @@ class IMRPhenomD(WaveFormModel):
         fcutPar = 0.2
         
         self.fRef = fRef
+        self.devPN = devPN
         
         super().__init__('BBH', fcutPar, **kwargs)
         
         self.QNMgrid_a     = onp.loadtxt(os.path.join(glob.WFfilesPath, 'QNMData_a.txt'))
         self.QNMgrid_fring = onp.loadtxt(os.path.join(glob.WFfilesPath, 'QNMData_fring.txt'))
         self.QNMgrid_fdamp = onp.loadtxt(os.path.join(glob.WFfilesPath, 'QNMData_fdamp.txt'))
+
+        if self.devPN is not None:
+            self.ParNums['deltaPN'] = self.nParams
+            self.nParams += 1
+               
+        pn_labels = {0: 'zero', 1: 'one', 2: 'two', 3: 'three', 4: 'four', 5: 'five', 6: 'six', 7: 'seven'}
+        if self.devPN is not None and self.devPN not in pn_labels:
+            print('Adding the ', self.devPN/2, 'pPN order deviation')
         
     def Phi(self, f, **kwargs):
         """
@@ -1077,6 +1129,31 @@ class IMRPhenomD(WaveFormModel):
         TF2coeffs['seven'] = 77096675.*np.pi/254016. + 378515.*np.pi*eta/1512.- 74045.*np.pi*eta2/756. + (-25150083775./3048192. + 10566655595.*eta/762048. - 1042165.*eta2/3024. + 5345.*eta2*eta/36.)*chi_s + Seta*((-25150083775./3048192. + 26804935.*eta/6048. - 1985.*eta2/48.)*chi_a)
         # Remove this part since it was not available when IMRPhenomD was tuned
         TF2coeffs['six'] = TF2coeffs['six'] - ((326.75/1.12 + 557.5/1.8*eta)*eta*chi1dotchi2 + ((4703.5/8.4+2935./6.*m1ByM-120.*m1ByM*m1ByM) + (-4108.25/6.72-108.5/1.2*m1ByM+125.5/3.6*m1ByM*m1ByM))*m1ByM*m1ByM*chi12 + ((4703.5/8.4+2935./6.*m2ByM-120.*m2ByM*m2ByM) + (-4108.25/6.72-108.5/1.2*m2ByM+125.5/3.6*m2ByM*m2ByM))*m2ByM*m2ByM*chi22)
+
+        #Adding the PPN deviations
+        pn_labels = {0: 'zero', 1: 'one', 2: 'two', 3: 'three', 4: 'four', 5: 'five', 6: 'six', 7: 'seven'}
+        
+        if self.devPN is None:
+            pass
+        elif self.devPN is not None:
+            if 'deltaPN' not in kwargs:
+                raise ValueError('Expected deltaPN parameter in the event catalog!')
+            elif self.devPN not in pn_labels:
+                #Adding deviations for terms not in the code yet
+                TF2coeffs['higher'] = kwargs['deltaPN']
+            else:
+                key = pn_labels[self.devPN]
+                #for devPN==1 the whole coeff is just our deviation:
+                if self.devPN == 1: 
+                    TF2coeffs['one'] = kwargs['deltaPN']
+                #Every other case:
+                else:
+                    TF2coeffs[key] = (1 + kwargs['deltaPN']) * TF2coeffs[key]
+                    if self.devPN == 5:
+                        TF2coeffs['five_log'] = (1 + kwargs['deltaPN']) * TF2coeffs['five_log']
+                    elif self.devPN == 6:
+                        TF2coeffs['six_log'] = (1 + kwargs['deltaPN']) * TF2coeffs['six_log']
+
         # Now translate into inspiral coefficients, label with the power in front of which they appear
         PhiInspcoeffs = {}
         
@@ -1094,6 +1171,13 @@ class IMRPhenomD(WaveFormModel):
         PhiInspcoeffs['four_thirds'] = sigma2 * 0.75
         PhiInspcoeffs['five_thirds'] = sigma3 * 0.6
         PhiInspcoeffs['two'] = sigma4 * 0.5
+
+        #Building the 'extra' PhiInspCoeff
+        _higher_p = None
+        if self.devPN is not None and self.devPN not in pn_labels and self.devPN != 1 and 'higher' in TF2coeffs:
+            devp = float(self.devPN)
+            _higher_p = (devp-5.0)/3.0
+            PhiInspcoeffs['higher'] = TF2coeffs['higher']*TF2OverallAmpl*(np.pi**(_higher_p))
         
         #Now compute the coefficients to align the three parts
         
@@ -1108,6 +1192,11 @@ class IMRPhenomD(WaveFormModel):
         # PhiIns'(fInsJoin)  =   PhiInt'(fInsJoin) + C2Int
         # This is the first derivative wrt f of the inspiral phase computed at fInsJoin, first add the PN contribution and then the higher order calibrated terms
         DPhiIns = (2.0*TF2coeffs['seven']*TF2OverallAmpl*((np.pi*fInsJoin)**(7./3.)) + (TF2coeffs['six']*TF2OverallAmpl + TF2coeffs['six_log']*TF2OverallAmpl * (1.0 + np.log(np.pi*fInsJoin)/3.))*((np.pi*fInsJoin)**(2.)) + TF2coeffs['five_log']*TF2OverallAmpl*((np.pi*fInsJoin)**(5./3.)) - TF2coeffs['four']*TF2OverallAmpl*((np.pi*fInsJoin)**(4./3.)) - 2.*TF2coeffs['three']*TF2OverallAmpl*(np.pi*fInsJoin) - 3.*TF2coeffs['two']*TF2OverallAmpl*((np.pi*fInsJoin)**(2./3.)) - 4.*TF2coeffs['one']*TF2OverallAmpl*((np.pi*fInsJoin)**(1./3.)) - 5.*TF2coeffs['zero']*TF2OverallAmpl)*np.pi/(3.*((np.pi*fInsJoin)**(8./3.)))
+
+        #Adding the contribution given by the 'extra' term to the derivative wrt f
+        if _higher_p is not None and 'higher' in PhiInspcoeffs:
+            DPhiIns = DPhiIns + PhiInspcoeffs['higher']*_higher_p*(fInsJoin**(_higher_p - 1.0))
+            
         DPhiIns = DPhiIns + (sigma1 + sigma2*(fInsJoin**(1./3.)) + sigma3*(fInsJoin**(2./3.)) + sigma4*fInsJoin)/eta
         # This is the first derivative of the Intermediate phase computed at fInsJoin
         DPhiInt = (beta1 + beta3/(fInsJoin**4) + beta2/fInsJoin)/eta
@@ -1116,6 +1205,11 @@ class IMRPhenomD(WaveFormModel):
         
         # This is the inspiral phase computed at fInsJoin
         PhiInsJoin = PhiInspcoeffs['initial_phasing'] + PhiInspcoeffs['two_thirds']*(fInsJoin**(2./3.)) + PhiInspcoeffs['third']*(fInsJoin**(1./3.)) + PhiInspcoeffs['third_log']*(fInsJoin**(1./3.))*np.log(np.pi*fInsJoin)/3. + PhiInspcoeffs['log']*np.log(np.pi*fInsJoin)/3. + PhiInspcoeffs['min_third']*(fInsJoin**(-1./3.)) + PhiInspcoeffs['min_two_thirds']*(fInsJoin**(-2./3.)) + PhiInspcoeffs['min_one']/fInsJoin + PhiInspcoeffs['min_four_thirds']*(fInsJoin**(-4./3.)) + PhiInspcoeffs['min_five_thirds']*(fInsJoin**(-5./3.)) + (PhiInspcoeffs['one']*fInsJoin + PhiInspcoeffs['four_thirds']*(fInsJoin**(4./3.)) + PhiInspcoeffs['five_thirds']*(fInsJoin**(5./3.)) + PhiInspcoeffs['two']*fInsJoin*fInsJoin)/eta
+
+        #Adding the contrinution of the 'extra' term
+        if _higher_p is not None and 'higher' in PhiInspcoeffs:
+            PhiInsJoin = PhiInsJoin + PhiInspcoeffs['higher']*(fInsJoin**_higher_p)
+            
         # This is the Intermediate phase computed at fInsJoin
         PhiIntJoin = beta1*fInsJoin - beta3/(3.*fInsJoin*fInsJoin*fInsJoin) + beta2*np.log(fInsJoin)
         
@@ -1141,16 +1235,27 @@ class IMRPhenomD(WaveFormModel):
         fRef   = np.amin(fgrid, axis=0)
         if self.fRef is not None:
             fRef = M*glob.GMsun_over_c3*self.fRef
-        if self.apply_fcut:
-            phiRef = np.where(fRef < self.PHI_fJoin_INS, PhiInspcoeffs['initial_phasing'] + PhiInspcoeffs['two_thirds']*(fRef**(2./3.)) + PhiInspcoeffs['third']*(fRef**(1./3.)) + PhiInspcoeffs['third_log']*(fRef**(1./3.))*np.log(np.pi*fRef)/3. + PhiInspcoeffs['log']*np.log(np.pi*fRef)/3. + PhiInspcoeffs['min_third']*(fRef**(-1./3.)) + PhiInspcoeffs['min_two_thirds']*(fRef**(-2./3.)) + PhiInspcoeffs['min_one']/fRef + PhiInspcoeffs['min_four_thirds']*(fRef**(-4./3.)) + PhiInspcoeffs['min_five_thirds']*(fRef**(-5./3.)) + (PhiInspcoeffs['one']*fRef + PhiInspcoeffs['four_thirds']*(fRef**(4./3.)) + PhiInspcoeffs['five_thirds']*(fRef**(5./3.)) + PhiInspcoeffs['two']*fRef*fRef)/eta, np.where(fRef<fMRDJoin, (beta1*fRef - beta3/(3.*fRef*fRef*fRef) + beta2*np.log(fRef))/eta + C1Int + C2Int*fRef, np.where(fRef < self.fcutPar, (-(alpha2/fRef) + (4.0/3.0) * (alpha3 * (fRef**(3./4.))) + alpha1 * fRef + alpha4 * np.arctan((fRef - alpha5 * fring)/fdamp))/eta + C1MRD + C2MRD*fRef,0.)))
+            
+        # Adding the 'extra' term contribution or setting it to zero if it doesn't exist
+        if _higher_p is not None and 'higher' in PhiInspcoeffs:
+            hp = _higher_p
+            higher_term_ref = PhiInspcoeffs['higher']*(fRef**hp)
+            higher_term_grid = PhiInspcoeffs['higher']*(fgrid**hp)
+        else:
+            higher_term_ref = 0.0
+            higher_term_grid = 0.0
 
-            phis = np.where(fgrid < self.PHI_fJoin_INS, PhiInspcoeffs['initial_phasing'] + PhiInspcoeffs['two_thirds']*(fgrid**(2./3.)) + PhiInspcoeffs['third']*(fgrid**(1./3.)) + PhiInspcoeffs['third_log']*(fgrid**(1./3.))*np.log(np.pi*fgrid)/3. + PhiInspcoeffs['log']*np.log(np.pi*fgrid)/3. + PhiInspcoeffs['min_third']*(fgrid**(-1./3.)) + PhiInspcoeffs['min_two_thirds']*(fgrid**(-2./3.)) + PhiInspcoeffs['min_one']/fgrid + PhiInspcoeffs['min_four_thirds']*(fgrid**(-4./3.)) + PhiInspcoeffs['min_five_thirds']*(fgrid**(-5./3.)) + (PhiInspcoeffs['one']*fgrid + PhiInspcoeffs['four_thirds']*(fgrid**(4./3.)) + PhiInspcoeffs['five_thirds']*(fgrid**(5./3.)) + PhiInspcoeffs['two']*fgrid*fgrid)/eta, np.where(fgrid<fMRDJoin, (beta1*fgrid - beta3/(3.*fgrid*fgrid*fgrid) + beta2*np.log(fgrid))/eta + C1Int + C2Int*fgrid, np.where(fgrid < self.fcutPar, (-(alpha2/fgrid) + (4.0/3.0) * (alpha3 * (fgrid**(3./4.))) + alpha1 * fgrid + alpha4 * np.arctan((fgrid - alpha5 * fring)/fdamp))/eta + C1MRD + C2MRD*fgrid,0.)))
+            
+        if self.apply_fcut:
+            phiRef = np.where(fRef < self.PHI_fJoin_INS, PhiInspcoeffs['initial_phasing'] + PhiInspcoeffs['two_thirds']*(fRef**(2./3.)) + PhiInspcoeffs['third']*(fRef**(1./3.)) + PhiInspcoeffs['third_log']*(fRef**(1./3.))*np.log(np.pi * fRef)/3. + PhiInspcoeffs['log']*np.log(np.pi*fRef)/3. + PhiInspcoeffs['min_third']*(fRef**(-1./3.)) + PhiInspcoeffs['min_two_thirds']*(fRef**(-2./3.)) + PhiInspcoeffs['min_one']/fRef + PhiInspcoeffs['min_four_thirds']*(fRef**(-4./3.)) + PhiInspcoeffs['min_five_thirds']*(fRef**(-5./3.)) + (PhiInspcoeffs['one']*fRef + PhiInspcoeffs['four_thirds']*(fRef**(4./3.)) + PhiInspcoeffs['five_thirds']*(fRef**(5./3.)) + PhiInspcoeffs['two']*fRef*fRef)/eta + higher_term_ref, np.where(fRef < fMRDJoin, (beta1*fRef - beta3/(3.*fRef*fRef*fRef) + beta2*np.log(fRef))/eta + C1Int + C2Int*fRef, np.where(fRef < self.fcutPar, (-(alpha2/fRef) + (4.0/3.0)*(alpha3*(fRef**(3./4.))) + alpha1*fRef + alpha4*np.arctan((fRef - alpha5*fring)/fdamp))/eta + C1MRD + C2MRD*fRef,0.0)))
+
+            phis = np.where(fgrid < self.PHI_fJoin_INS, PhiInspcoeffs['initial_phasing'] + PhiInspcoeffs['two_thirds']*(fgrid**(2./3.)) + PhiInspcoeffs['third']*(fgrid**(1./3.)) + PhiInspcoeffs['third_log']*(fgrid**(1./3.))*np.log(np.pi*fgrid)/3. + PhiInspcoeffs['log']*np.log(np.pi*fgrid)/3. + PhiInspcoeffs['min_third']*(fgrid**(-1./3.)) + PhiInspcoeffs['min_two_thirds']*(fgrid**(-2./3.)) + PhiInspcoeffs['min_one']/fgrid + PhiInspcoeffs['min_four_thirds']*(fgrid**(-4./3.)) + PhiInspcoeffs['min_five_thirds']*(fgrid**(-5./3.)) + (PhiInspcoeffs['one']*fgrid + PhiInspcoeffs['four_thirds']*(fgrid**(4./3.)) + PhiInspcoeffs['five_thirds']*(fgrid**(5./3.)) + PhiInspcoeffs['two']*fgrid*fgrid)/eta + higher_term_grid, np.where(fgrid < fMRDJoin, (beta1*fgrid - beta3/(3.*fgrid*fgrid*fgrid) + beta2*np.log(fgrid))/eta + C1Int + C2Int*fgrid, np.where(fgrid < self.fcutPar, (-(alpha2/fgrid) + (4.0/3.0)*(alpha3*(fgrid**(3./4.))) + alpha1*fgrid + alpha4*np.arctan((fgrid-alpha5*fring)/fdamp))/eta + C1MRD + C2MRD*fgrid, 0.0)))
             
             return phis + np.where(fgrid < self.fcutPar, - t0*(fgrid - fRef) - phiRef, 0.)
         else:
-            phiRef = np.where(fRef < self.PHI_fJoin_INS, PhiInspcoeffs['initial_phasing'] + PhiInspcoeffs['two_thirds']*(fRef**(2./3.)) + PhiInspcoeffs['third']*(fRef**(1./3.)) + PhiInspcoeffs['third_log']*(fRef**(1./3.))*np.log(np.pi*fRef)/3. + PhiInspcoeffs['log']*np.log(np.pi*fRef)/3. + PhiInspcoeffs['min_third']*(fRef**(-1./3.)) + PhiInspcoeffs['min_two_thirds']*(fRef**(-2./3.)) + PhiInspcoeffs['min_one']/fRef + PhiInspcoeffs['min_four_thirds']*(fRef**(-4./3.)) + PhiInspcoeffs['min_five_thirds']*(fRef**(-5./3.)) + (PhiInspcoeffs['one']*fRef + PhiInspcoeffs['four_thirds']*(fRef**(4./3.)) + PhiInspcoeffs['five_thirds']*(fRef**(5./3.)) + PhiInspcoeffs['two']*fRef*fRef)/eta, np.where(fRef<fMRDJoin, (beta1*fRef - beta3/(3.*fRef*fRef*fRef) + beta2*np.log(fRef))/eta + C1Int + C2Int*fRef, (-(alpha2/fRef) + (4.0/3.0) * (alpha3 * (fRef**(3./4.))) + alpha1 * fRef + alpha4 * np.arctan((fRef - alpha5 * fring)/fdamp))/eta + C1MRD + C2MRD*fRef))
+            phiRef = np.where(fRef < self.PHI_fJoin_INS, PhiInspcoeffs['initial_phasing'] + PhiInspcoeffs['two_thirds']*(fRef**(2./3.)) + PhiInspcoeffs['third']*(fRef**(1./3.)) + PhiInspcoeffs['third_log']*(fRef**(1./3.))*np.log(np.pi*fRef)/3. + PhiInspcoeffs['log']*np.log(np.pi*fRef)/3. + PhiInspcoeffs['min_third']*(fRef**(-1./3.)) + PhiInspcoeffs['min_two_thirds']*(fRef**(-2./3.)) + PhiInspcoeffs['min_one']/fRef + PhiInspcoeffs['min_four_thirds']*(fRef**(-4./3.)) + PhiInspcoeffs['min_five_thirds']*(fRef**(-5./3.)) + (PhiInspcoeffs['one']*fRef + PhiInspcoeffs['four_thirds']*(fRef**(4./3.)) + PhiInspcoeffs['five_thirds']*(fRef**(5./3.)) + PhiInspcoeffs['two']*fRef*fRef)/eta + higher_term_ref, np.where(fRef<fMRDJoin, (beta1*fRef - beta3/(3.*fRef*fRef*fRef) + beta2*np.log(fRef))/eta + C1Int + C2Int*fRef, (-(alpha2/fRef) + (4.0/3.0) * (alpha3 * (fRef**(3./4.))) + alpha1 * fRef + alpha4 * np.arctan((fRef - alpha5 * fring)/fdamp))/eta + C1MRD + C2MRD*fRef))
 
-            phis = np.where(fgrid < self.PHI_fJoin_INS, PhiInspcoeffs['initial_phasing'] + PhiInspcoeffs['two_thirds']*(fgrid**(2./3.)) + PhiInspcoeffs['third']*(fgrid**(1./3.)) + PhiInspcoeffs['third_log']*(fgrid**(1./3.))*np.log(np.pi*fgrid)/3. + PhiInspcoeffs['log']*np.log(np.pi*fgrid)/3. + PhiInspcoeffs['min_third']*(fgrid**(-1./3.)) + PhiInspcoeffs['min_two_thirds']*(fgrid**(-2./3.)) + PhiInspcoeffs['min_one']/fgrid + PhiInspcoeffs['min_four_thirds']*(fgrid**(-4./3.)) + PhiInspcoeffs['min_five_thirds']*(fgrid**(-5./3.)) + (PhiInspcoeffs['one']*fgrid + PhiInspcoeffs['four_thirds']*(fgrid**(4./3.)) + PhiInspcoeffs['five_thirds']*(fgrid**(5./3.)) + PhiInspcoeffs['two']*fgrid*fgrid)/eta, np.where(fgrid<fMRDJoin, (beta1*fgrid - beta3/(3.*fgrid*fgrid*fgrid) + beta2*np.log(fgrid))/eta + C1Int + C2Int*fgrid, (-(alpha2/fgrid) + (4.0/3.0) * (alpha3 * (fgrid**(3./4.))) + alpha1 * fgrid + alpha4 * np.arctan((fgrid - alpha5 * fring)/fdamp))/eta + C1MRD + C2MRD*fgrid))
+            phis = np.where(fgrid < self.PHI_fJoin_INS, PhiInspcoeffs['initial_phasing'] + PhiInspcoeffs['two_thirds']*(fgrid**(2./3.)) + PhiInspcoeffs['third']*(fgrid**(1./3.)) + PhiInspcoeffs['third_log']*(fgrid**(1./3.))*np.log(np.pi*fgrid)/3. + PhiInspcoeffs['log']*np.log(np.pi*fgrid)/3. + PhiInspcoeffs['min_third']*(fgrid**(-1./3.)) + PhiInspcoeffs['min_two_thirds']*(fgrid**(-2./3.)) + PhiInspcoeffs['min_one']/fgrid + PhiInspcoeffs['min_four_thirds']*(fgrid**(-4./3.)) + PhiInspcoeffs['min_five_thirds']*(fgrid**(-5./3.)) + (PhiInspcoeffs['one']*fgrid + PhiInspcoeffs['four_thirds']*(fgrid**(4./3.)) + PhiInspcoeffs['five_thirds']*(fgrid**(5./3.)) + PhiInspcoeffs['two']*fgrid*fgrid)/eta + higher_term_grid, np.where(fgrid<fMRDJoin, (beta1*fgrid - beta3/(3.*fgrid*fgrid*fgrid) + beta2*np.log(fgrid))/eta + C1Int + C2Int*fgrid, (-(alpha2/fgrid) + (4.0/3.0) * (alpha3 * (fgrid**(3./4.))) + alpha1 * fgrid + alpha4 * np.arctan((fgrid - alpha5 * fring)/fdamp))/eta + C1MRD + C2MRD*fgrid))
             
             return phis - t0*(fgrid - fRef) - phiRef
         
@@ -1867,7 +1972,7 @@ class IMRPhenomHM(WaveFormModel):
         fcutPar = 0.2
         
         self.fRef = fRef
-        self.devPN = devPN ###OFF remove this
+        self.devPN = devPN
         
         super().__init__('BBH', fcutPar, is_HigherModes=True, **kwargs)
 
@@ -1875,22 +1980,12 @@ class IMRPhenomHM(WaveFormModel):
         if self.devPN is not None:
             self.ParNums['deltaPN'] = self.nParams
             self.nParams += 1
-            
-        #Checking that everything is ok:     
-        pn_labels = {
-            0: 'zero',
-            2: 'two',
-            3: 'three',
-            4: 'four',
-            5: 'five',
-            6: 'six',
-            7: 'seven'
-            }
+                 
+        pn_labels = {0: 'zero', 1: 'one', 2: 'two', 3: 'three', 4: 'four', 5: 'five', 6: 'six', 7: 'seven'}
+
+        #Printing that we are adding en 'extra' PN coeff
         if self.devPN is not None and self.devPN not in pn_labels:
-            #if self.devPN < 0 and self.devPN == 1:
-            #raise ValueError(f'ERROR: expected devPN value among {list(pn_labels.keys())}')
-            #elif self.devPN > 7:
-            print('Adding the ', self.devPN/2, 'pPN order deviation')
+            print('Adding the ', self.devPN/2, 'PPN order deviation')
         
         # List of phase shifts: the index is the azimuthal number m
         self.complShiftm = np.array([0., np.pi*0.5, 0., -np.pi*0.5, np.pi, np.pi*0.5, 0.])
@@ -1985,32 +2080,29 @@ class IMRPhenomHM(WaveFormModel):
         # Remove this part since it was not available when IMRPhenomD was tuned
         TF2coeffs['six'] = TF2coeffs['six'] - ((326.75/1.12 + 557.5/1.8*eta)*eta*chi1dotchi2 + ((4703.5/8.4+2935./6.*m1ByM-120.*m1ByM*m1ByM) + (-4108.25/6.72-108.5/1.2*m1ByM+125.5/3.6*m1ByM*m1ByM))*m1ByM*m1ByM*chi12 + ((4703.5/8.4+2935./6.*m2ByM-120.*m2ByM*m2ByM) + (-4108.25/6.72-108.5/1.2*m2ByM+125.5/3.6*m2ByM*m2ByM))*m2ByM*m2ByM*chi22)
 
-
-        pn_labels = {
-            0: 'zero',
-            2: 'two',
-            3: 'three',
-            4: 'four',
-            5: 'five',
-            6: 'six',
-            7: 'seven'
-            }
-        
-        
+        #Adding the deviation
+        pn_labels = {0: 'zero', 1: 'one', 2: 'two', 3: 'three', 4: 'four', 5: 'five', 6: 'six', 7: 'seven'}
+                
         if self.devPN is None:
             pass
         elif self.devPN is not None:
             if 'deltaPN' not in kwargs:
                 raise ValueError('Expected deltaPN parameter in the event catalog!')
             elif self.devPN not in pn_labels:
+                #Adding the 'extra' term
                 TF2coeffs['higher'] = kwargs['deltaPN']
             else:
                 key = pn_labels[self.devPN]
-                TF2coeffs[key] = (1 + kwargs['deltaPN']) * TF2coeffs[key]
-                if self.devPN == 5:
-                    TF2coeffs['five_log'] = (1 + kwargs['deltaPN']) * TF2coeffs['five_log']
-                elif self.devPN == 6:
-                    TF2coeffs['six_log'] = (1 + kwargs['deltaPN']) * TF2coeffs['six_log']
+                if self.devPN == 1:
+                    #If devPN==1 the whole coeff is the deviation 
+                    TF2coeffs['one'] = kwargs['deltaPN']
+                else:
+                    #Every other case:
+                    TF2coeffs[key] = (1 + kwargs['deltaPN'])*TF2coeffs[key]
+                    if self.devPN == 5:
+                        TF2coeffs['five_log'] = (1 + kwargs['deltaPN'])*TF2coeffs['five_log']
+                    elif self.devPN == 6:
+                        TF2coeffs['six_log'] = (1 + kwargs['deltaPN'])*TF2coeffs['six_log']
 
             
         # Now translate into inspiral coefficients, label with the power in front of which they appear
@@ -2031,6 +2123,13 @@ class IMRPhenomHM(WaveFormModel):
         PhiInspcoeffs['five_thirds'] = sigma3 * 0.6
         PhiInspcoeffs['two'] = sigma4 * 0.5
 
+        #Computing the PhiInspcoeffs for the 'extra' term
+        _higher_p = None
+        if self.devPN is not None and self.devPN not in pn_labels and self.devPN != 1 and 'higher' in TF2coeffs:
+            devp = float(self.devPN)
+            _higher_p = (devp-5.0)/3.0
+            PhiInspcoeffs['higher'] = TF2coeffs['higher']*TF2OverallAmpl*(np.pi**(_higher_p))
+
 
         fInsJoin = self.PHI_fJoin_INS
         fMRDJoin = 0.5*fring
@@ -2047,8 +2146,9 @@ class IMRPhenomHM(WaveFormModel):
         # This is the first derivative wrt f of the inspiral phase computed at fInsJoin, first add the PN contribution and then the higher order calibrated terms
         DPhiIns = (2.0*TF2coeffs['seven']*TF2OverallAmpl*((np.pi*fInsJoin)**(7./3.)) + (TF2coeffs['six']*TF2OverallAmpl + TF2coeffs['six_log']*TF2OverallAmpl * (1.0 + np.log(np.pi*fInsJoin)/3.))*((np.pi*fInsJoin)**(2.)) + TF2coeffs['five_log']*TF2OverallAmpl*((np.pi*fInsJoin)**(5./3.)) - TF2coeffs['four']*TF2OverallAmpl*((np.pi*fInsJoin)**(4./3.)) - 2.*TF2coeffs['three']*TF2OverallAmpl*(np.pi*fInsJoin) - 3.*TF2coeffs['two']*TF2OverallAmpl*((np.pi*fInsJoin)**(2./3.)) - 4.*TF2coeffs['one']*TF2OverallAmpl*((np.pi*fInsJoin)**(1./3.)) - 5.*TF2coeffs['zero']*TF2OverallAmpl)*np.pi/(3.*((np.pi*fInsJoin)**(8./3.)))
 
-        if self.devPN is not None and self.devPN not in pn_labels:
-            DPhiIns = DPhiIns + TF2coeffs['higher']*TF2OverallAmpl*((np.pi*fInsJoin)**((self.devPN-5)/3))
+        #Adding the contribution of the extra term to DPhiIns
+        if _higher_p is not None and 'higher' in PhiInspcoeffs:
+            DPhiIns = DPhiIns + PhiInspcoeffs['higher'] * _higher_p * (fInsJoin ** (_higher_p - 1.0))
         
         DPhiIns = DPhiIns + (sigma1 + sigma2*(fInsJoin**(1./3.)) + sigma3*(fInsJoin**(2./3.)) + sigma4*fInsJoin)/eta
         # This is the first derivative of the Intermediate phase computed at fInsJoin
@@ -2059,9 +2159,9 @@ class IMRPhenomHM(WaveFormModel):
         # This is the inspiral phase computed at fInsJoin
         PhiInsJoin = PhiInspcoeffs['initial_phasing'] + PhiInspcoeffs['two_thirds']*(fInsJoin**(2./3.)) + PhiInspcoeffs['third']*(fInsJoin**(1./3.)) + PhiInspcoeffs['third_log']*(fInsJoin**(1./3.))*np.log(np.pi*fInsJoin)/3. + PhiInspcoeffs['log']*np.log(np.pi*fInsJoin)/3. + PhiInspcoeffs['min_third']*(fInsJoin**(-1./3.)) + PhiInspcoeffs['min_two_thirds']*(fInsJoin**(-2./3.)) + PhiInspcoeffs['min_one']/fInsJoin + PhiInspcoeffs['min_four_thirds']*(fInsJoin**(-4./3.)) + PhiInspcoeffs['min_five_thirds']*(fInsJoin**(-5./3.)) + (PhiInspcoeffs['one']*fInsJoin + PhiInspcoeffs['four_thirds']*(fInsJoin**(4./3.)) + PhiInspcoeffs['five_thirds']*(fInsJoin**(5./3.)) + PhiInspcoeffs['two']*fInsJoin*fInsJoin)/eta
 
-        if self.devPN is not None and self.devPN not in pn_labels:
-            PhiInspcoeffs['higher'] = TF2coeffs['higher']*TF2OverallAmpl*(np.pi**((self.devPN-5)/3))
-            PhiInsJoin = PhiInsJoin + PhiInspcoeffs['higher']*(fInsJoin**((self.devPN-5)/3))
+        #Adding the contribution of the extra term to PhiInsJoin
+        if _higher_p is not None and 'higher' in PhiInspcoeffs:
+            PhiInsJoin = PhiInsJoin + PhiInspcoeffs['higher'] * (fInsJoin ** _higher_p)
         
         # This is the Intermediate phase computed at fInsJoin
         PhiIntJoin = beta1*fInsJoin - beta3/(3.*fInsJoin*fInsJoin*fInsJoin) + beta2*np.log(fInsJoin)
@@ -2085,16 +2185,42 @@ class IMRPhenomHM(WaveFormModel):
         t0 = (alpha1 + alpha2/(fpeak*fpeak) + alpha3/(fpeak**(1./4.)) + alpha4/(fdamp*(1. + (fpeak - alpha5*fring)*(fpeak - alpha5*fring)/(fdamp*fdamp))))/eta
         
         def completePhase(infreqs, C1MRDuse, C2MRDuse, RhoUse, TauUse):
-            if self.apply_fcut:
-                #if self.devPN not in pn_labels and self.devPN is not None:
-                    #return np.where(infreqs < self.PHI_fJoin_INS, PhiInspcoeffs['initial_phasing'] + PhiInspcoeffs['two_thirds']*(infreqs**(2./3.)) + PhiInspcoeffs['third']*(infreqs**(1./3.)) + PhiInspcoeffs['third_log']*(infreqs**(1./3.))*np.log(np.pi*infreqs)/3. + PhiInspcoeffs['log']*np.log(np.pi*infreqs)/3. + PhiInspcoeffs['min_third']*(infreqs**(-1./3.)) + PhiInspcoeffs['min_two_thirds']*(infreqs**(-2./3.)) + PhiInspcoeffs['min_one']/infreqs + PhiInspcoeffs['min_four_thirds']*(infreqs**(-4./3.)) + PhiInspcoeffs['min_five_thirds']*(infreqs**(-5./3.)) + (PhiInspcoeffs['one']*infreqs + PhiInspcoeffs['four_thirds']*(infreqs**(4./3.)) + PhiInspcoeffs['five_thirds']*(infreqs**(5./3.)) + PhiInspcoeffs['two']*infreqs*infreqs)/eta + PhiInspcoeffs['higher'], np.where(infreqs<fMRDJoin, (beta1*infreqs - beta3/(3.*infreqs*infreqs*infreqs) + beta2*np.log(infreqs))/eta + C1Int + C2Int*infreqs, np.where(infreqs < self.fcutPar, (-(alpha2/infreqs) + (4.0/3.0) * (alpha3 * (infreqs**(3./4.))) + alpha1 * infreqs + alpha4 * RhoUse * np.arctan((infreqs - alpha5 * fring)/(fdamp * RhoUse * TauUse)))/eta + C1MRDuse + C2MRDuse*infreqs,0.)))
-                #else: 
-                return np.where(infreqs < self.PHI_fJoin_INS, PhiInspcoeffs['initial_phasing'] + PhiInspcoeffs['two_thirds']*(infreqs**(2./3.)) + PhiInspcoeffs['third']*(infreqs**(1./3.)) + PhiInspcoeffs['third_log']*(infreqs**(1./3.))*np.log(np.pi*infreqs)/3. + PhiInspcoeffs['log']*np.log(np.pi*infreqs)/3. + PhiInspcoeffs['min_third']*(infreqs**(-1./3.)) + PhiInspcoeffs['min_two_thirds']*(infreqs**(-2./3.)) + PhiInspcoeffs['min_one']/infreqs + PhiInspcoeffs['min_four_thirds']*(infreqs**(-4./3.)) + PhiInspcoeffs['min_five_thirds']*(infreqs**(-5./3.)) + (PhiInspcoeffs['one']*infreqs + PhiInspcoeffs['four_thirds']*(infreqs**(4./3.)) + PhiInspcoeffs['five_thirds']*(infreqs**(5./3.)) + PhiInspcoeffs['two']*infreqs*infreqs)/eta, np.where(infreqs<fMRDJoin, (beta1*infreqs - beta3/(3.*infreqs*infreqs*infreqs) + beta2*np.log(infreqs))/eta + C1Int + C2Int*infreqs, np.where(infreqs < self.fcutPar, (-(alpha2/infreqs) + (4.0/3.0) * (alpha3 * (infreqs**(3./4.))) + alpha1 * infreqs + alpha4 * RhoUse * np.arctan((infreqs - alpha5 * fring)/(fdamp * RhoUse * TauUse)))/eta + C1MRDuse + C2MRDuse*infreqs,0.)))
+           
+            #Checking if we have defined the extra term:
+            try:
+                hp = _higher_p
+            except NameError:
+                hp = None
+
+            #Build the inspiral-phase base expression (without the extra term)
+            inspiral_base = (
+            PhiInspcoeffs['initial_phasing'] +
+            PhiInspcoeffs['two_thirds']*(infreqs**(2./3.)) +
+            PhiInspcoeffs['third']*(infreqs**(1./3.)) +
+            PhiInspcoeffs['third_log']*(infreqs**(1./3.))*np.log(np.pi*infreqs)/3. +
+            PhiInspcoeffs['log']*np.log(np.pi*infreqs)/3. +
+            PhiInspcoeffs['min_third']*(infreqs**(-1./3.)) +
+            PhiInspcoeffs['min_two_thirds']*(infreqs**(-2./3.)) +
+            PhiInspcoeffs['min_one']/infreqs +
+            PhiInspcoeffs['min_four_thirds']*(infreqs**(-4./3.)) +
+            PhiInspcoeffs['min_five_thirds']*(infreqs**(-5./3.)) +
+            (PhiInspcoeffs['one']*infreqs +
+            PhiInspcoeffs['four_thirds']*(infreqs**(4./3.)) +
+            PhiInspcoeffs['five_thirds']*(infreqs**(5./3.)) +
+            PhiInspcoeffs['two']*infreqs*infreqs)/eta)
+
+            #Adding the extra term contribution
+            if hp is not None and 'higher' in PhiInspcoeffs:
+                higher_term = PhiInspcoeffs['higher'] * (infreqs ** hp)
+                inspiral_phase = inspiral_base + higher_term
             else:
-                #if self.devPN is not None and self.devPN not in pn_labels:
-                    #return np.where(infreqs < self.PHI_fJoin_INS, PhiInspcoeffs['initial_phasing'] + PhiInspcoeffs['two_thirds']*(infreqs**(2./3.)) + PhiInspcoeffs['third']*(infreqs**(1./3.)) + PhiInspcoeffs['third_log']*(infreqs**(1./3.))*np.log(np.pi*infreqs)/3. + PhiInspcoeffs['log']*np.log(np.pi*infreqs)/3. + PhiInspcoeffs['min_third']*(infreqs**(-1./3.)) + PhiInspcoeffs['min_two_thirds']*(infreqs**(-2./3.)) + PhiInspcoeffs['min_one']/infreqs + PhiInspcoeffs['min_four_thirds']*(infreqs**(-4./3.)) + PhiInspcoeffs['min_five_thirds']*(infreqs**(-5./3.)) + (PhiInspcoeffs['one']*infreqs + PhiInspcoeffs['four_thirds']*(infreqs**(4./3.)) + PhiInspcoeffs['five_thirds']*(infreqs**(5./3.)) + PhiInspcoeffs['two']*infreqs*infreqs)/eta + PhiInspcoeffs['higher'], np.where(infreqs<fMRDJoin, (beta1*infreqs - beta3/(3.*infreqs*infreqs*infreqs) + beta2*np.log(infreqs))/eta + C1Int + C2Int*infreqs, (-(alpha2/infreqs) + (4.0/3.0) * (alpha3 * (infreqs**(3./4.))) + alpha1 * infreqs + alpha4 * RhoUse * np.arctan((infreqs - alpha5 * fring)/(fdamp * RhoUse * TauUse)))/eta + C1MRDuse + C2MRDuse*infreqs))
-                #else:
-                return np.where(infreqs < self.PHI_fJoin_INS, PhiInspcoeffs['initial_phasing'] + PhiInspcoeffs['two_thirds']*(infreqs**(2./3.)) + PhiInspcoeffs['third']*(infreqs**(1./3.)) + PhiInspcoeffs['third_log']*(infreqs**(1./3.))*np.log(np.pi*infreqs)/3. + PhiInspcoeffs['log']*np.log(np.pi*infreqs)/3. + PhiInspcoeffs['min_third']*(infreqs**(-1./3.)) + PhiInspcoeffs['min_two_thirds']*(infreqs**(-2./3.)) + PhiInspcoeffs['min_one']/infreqs + PhiInspcoeffs['min_four_thirds']*(infreqs**(-4./3.)) + PhiInspcoeffs['min_five_thirds']*(infreqs**(-5./3.)) + (PhiInspcoeffs['one']*infreqs + PhiInspcoeffs['four_thirds']*(infreqs**(4./3.)) + PhiInspcoeffs['five_thirds']*(infreqs**(5./3.)) + PhiInspcoeffs['two']*infreqs*infreqs)/eta, np.where(infreqs<fMRDJoin, (beta1*infreqs - beta3/(3.*infreqs*infreqs*infreqs) + beta2*np.log(infreqs))/eta + C1Int + C2Int*infreqs, (-(alpha2/infreqs) + (4.0/3.0) * (alpha3 * (infreqs**(3./4.))) + alpha1 * infreqs + alpha4 * RhoUse * np.arctan((infreqs - alpha5 * fring)/(fdamp * RhoUse * TauUse)))/eta + C1MRDuse + C2MRDuse*infreqs))
+                inspiral_phase = inspiral_base
+
+            if self.apply_fcut:
+                return np.where(infreqs < self.PHI_fJoin_INS, inspiral_phase, np.where(infreqs < fMRDJoin,(beta1 * infreqs - beta3 / (3. * infreqs * infreqs * infreqs) + beta2 * np.log(infreqs)) / eta + C1Int + C2Int * infreqs,np.where(infreqs < self.fcutPar,(-(alpha2 / infreqs) + (4.0 / 3.0) * (alpha3 *(infreqs ** (3. / 4.))) + alpha1 * infreqs + alpha4 * RhoUse * np.arctan((infreqs - alpha5 * fring) / (fdamp * RhoUse * TauUse))) / eta + C1MRDuse + C2MRDuse * infreqs,0.0)))
+                
+            else:
+                return np.where(infreqs < self.PHI_fJoin_INS,inspiral_phase,np.where(infreqs < fMRDJoin,(beta1 * infreqs - beta3 / (3. * infreqs * infreqs * infreqs) + beta2 * np.log(infreqs)) / eta + C1Int + C2Int * infreqs,(-(alpha2 / infreqs) + (4.0 / 3.0) * (alpha3 * (infreqs ** (3. / 4.))) + alpha1 * infreqs + alpha4 * RhoUse * np.arctan((infreqs - alpha5 * fring) / (fdamp * RhoUse * TauUse)))/eta + C1MRDuse + C2MRDuse * infreqs))
                 
         phiRef = completePhase(fRef, C1MRD, C2MRD, 1., 1.)
         phi0   = 0.5*phiRef
@@ -2443,17 +2569,8 @@ class IMRPhenomHM(WaveFormModel):
         # Remove this part since it was not available when IMRPhenomD was tuned
         TF2coeffs['six'] = TF2coeffs['six'] - ((326.75/1.12 + 557.5/1.8*eta)*eta*chi1dotchi2 + ((4703.5/8.4+2935./6.*m1ByM-120.*m1ByM*m1ByM) + (-4108.25/6.72-108.5/1.2*m1ByM+125.5/3.6*m1ByM*m1ByM))*m1ByM*m1ByM*chi12 + ((4703.5/8.4+2935./6.*m2ByM-120.*m2ByM*m2ByM) + (-4108.25/6.72-108.5/1.2*m2ByM+125.5/3.6*m2ByM*m2ByM))*m2ByM*m2ByM*chi22)
 
-
-        pn_labels = {
-            0: 'zero',
-            2: 'two',
-            3: 'three',
-            4: 'four',
-            5: 'five',
-            6: 'six',
-            7: 'seven'
-            }
-        
+        #Adding PPN deviations:
+        pn_labels = {0: 'zero', 1: 'one', 2: 'two', 3: 'three', 4: 'four', 5: 'five', 6: 'six', 7: 'seven'}
         
         if self.devPN is None:
             pass
@@ -2464,13 +2581,15 @@ class IMRPhenomHM(WaveFormModel):
                 TF2coeffs['higher'] = kwargs['deltaPN']
             else:
                 key = pn_labels[self.devPN]
-                TF2coeffs[key] = (1 + kwargs['deltaPN']) * TF2coeffs[key]
-                if self.devPN == 5:
-                    TF2coeffs['five_log'] = (1 + kwargs['deltaPN']) * TF2coeffs['five_log']
-                elif self.devPN == 6:
-                    TF2coeffs['six_log'] = (1 + kwargs['deltaPN']) * TF2coeffs['six_log']
+                if self.devPN == 1:
+                    TF2coeffs['one'] = kwargs['deltaPN']
+                else:
+                    TF2coeffs[key] = (1 + kwargs['deltaPN']) * TF2coeffs[key]
+                    if self.devPN == 5:
+                        TF2coeffs['five_log'] = (1 + kwargs['deltaPN']) * TF2coeffs['five_log']
+                    elif self.devPN == 6:
+                        TF2coeffs['six_log'] = (1 + kwargs['deltaPN']) * TF2coeffs['six_log']
 
-        
         # Now translate into inspiral coefficients, label with the power in front of which they appear
         PhiInspcoeffs = {}
         
@@ -2489,6 +2608,13 @@ class IMRPhenomHM(WaveFormModel):
         PhiInspcoeffs['five_thirds'] = sigma3 * 0.6
         PhiInspcoeffs['two'] = sigma4 * 0.5
 
+        #Adding the 'extra' term contribution
+        _higher_p = None
+        if self.devPN is not None and self.devPN not in pn_labels and self.devPN != 1 and 'higher' in TF2coeffs:
+            devp = float(self.devPN)
+            _higher_p = (devp - 5.0)/3.0
+            PhiInspcoeffs['higher'] = TF2coeffs['higher']*TF2OverallAmpl*(np.pi**(_higher_p))
+
         fInsJoinPh = self.PHI_fJoin_INS
         fMRDJoinPh = 0.5*fring
                     
@@ -2503,8 +2629,9 @@ class IMRPhenomHM(WaveFormModel):
         # This is the first derivative wrt f of the inspiral phase computed at fInsJoin, first add the PN contribution and then the higher order calibrated terms
         DPhiIns = (2.0*TF2coeffs['seven']*TF2OverallAmpl*((np.pi*fInsJoinPh)**(7./3.)) + (TF2coeffs['six']*TF2OverallAmpl + TF2coeffs['six_log']*TF2OverallAmpl * (1.0 + np.log(np.pi*fInsJoinPh)/3.))*((np.pi*fInsJoinPh)**(2.)) + TF2coeffs['five_log']*TF2OverallAmpl*((np.pi*fInsJoinPh)**(5./3.)) - TF2coeffs['four']*TF2OverallAmpl*((np.pi*fInsJoinPh)**(4./3.)) - 2.*TF2coeffs['three']*TF2OverallAmpl*(np.pi*fInsJoinPh) - 3.*TF2coeffs['two']*TF2OverallAmpl*((np.pi*fInsJoinPh)**(2./3.)) - 4.*TF2coeffs['one']*TF2OverallAmpl*((np.pi*fInsJoinPh)**(1./3.)) - 5.*TF2coeffs['zero']*TF2OverallAmpl)*np.pi/(3.*((np.pi*fInsJoinPh)**(8./3.)))
 
-        if self.devPN is not None and self.devPN not in pn_labels:
-            DPhiIns = DPhiIns + TF2coeffs['higher']*TF2OverallAmpl*((np.pi*fInsJoinPh)**((self.devPN-5)/3))
+        #Adding the 'extra' term contribution
+        if _higher_p is not None and 'higher' in PhiInspcoeffs:
+            DPhiIns = DPhiIns + PhiInspcoeffs['higher']*_higher_p*(fInsJoinPh**(_higher_p - 1.0))
             
         DPhiIns = DPhiIns + (sigma1 + sigma2*(fInsJoinPh**(1./3.)) + sigma3*(fInsJoinPh**(2./3.)) + sigma4*fInsJoinPh)/eta
         # This is the first derivative of the Intermediate phase computed at fInsJoin
@@ -2514,10 +2641,10 @@ class IMRPhenomHM(WaveFormModel):
         
         # This is the inspiral phase computed at fInsJoin
         PhiInsJoin = PhiInspcoeffs['initial_phasing'] + PhiInspcoeffs['two_thirds']*(fInsJoinPh**(2./3.)) + PhiInspcoeffs['third']*(fInsJoinPh**(1./3.)) + PhiInspcoeffs['third_log']*(fInsJoinPh**(1./3.))*np.log(np.pi*fInsJoinPh)/3. + PhiInspcoeffs['log']*np.log(np.pi*fInsJoinPh)/3. + PhiInspcoeffs['min_third']*(fInsJoinPh**(-1./3.)) + PhiInspcoeffs['min_two_thirds']*(fInsJoinPh**(-2./3.)) + PhiInspcoeffs['min_one']/fInsJoinPh + PhiInspcoeffs['min_four_thirds']*(fInsJoinPh**(-4./3.)) + PhiInspcoeffs['min_five_thirds']*(fInsJoinPh**(-5./3.)) + (PhiInspcoeffs['one']*fInsJoinPh + PhiInspcoeffs['four_thirds']*(fInsJoinPh**(4./3.)) + PhiInspcoeffs['five_thirds']*(fInsJoinPh**(5./3.)) + PhiInspcoeffs['two']*fInsJoinPh*fInsJoinPh)/eta
-        
-        if self.devPN is not None and self.devPN not in pn_labels:
-            PhiInspcoeffs['higher'] = TF2coeffs['higher']*TF2OverallAmpl*(np.pi**((self.devPN-5)/3))
-            PhiInsJoin = PhiInsJoin + PhiInspcoeffs['higher']*(fInsJoinPh**((self.devPN-5)/3))
+
+        #Adding the 'extra' term contribution
+        if _higher_p is not None and 'higher' in PhiInspcoeffs:
+            PhiInsJoin = PhiInsJoin + PhiInspcoeffs['higher']*(fInsJoinPh**_higher_p)
             
         # This is the Intermediate phase computed at fInsJoin
         PhiIntJoin = beta1*fInsJoinPh - beta3/(3.*fInsJoinPh*fInsJoinPh*fInsJoinPh) + beta2*np.log(fInsJoinPh)
@@ -2603,16 +2730,43 @@ class IMRPhenomHM(WaveFormModel):
                 return Overallamp*amp0*(infreqs**(-7./6.))*np.where(infreqs < self.AMP_fJoin_INS, 1. + (infreqs**(2./3.))*Acoeffs['two_thirds'] + (infreqs**(4./3.)) * Acoeffs['four_thirds'] + (infreqs**(5./3.)) *  Acoeffs['five_thirds'] + (infreqs**(7./3.)) * Acoeffs['seven_thirds'] + (infreqs**(8./3.)) * Acoeffs['eight_thirds'] + infreqs * (Acoeffs['one'] + infreqs * Acoeffs['two'] + infreqs*infreqs * Acoeffs['three']), np.where(infreqs < fpeak, delta0 + infreqs*delta1 + infreqs*infreqs*(delta2 + infreqs*delta3 + infreqs*infreqs*delta4), np.exp(-(infreqs - fring)*gamma2/(fdamp*gamma3))* (fdamp*gamma3*gamma1) / ((infreqs - fring)*(infreqs - fring) + fdamp*gamma3*fdamp*gamma3)))
         
         def completePhase(infreqs, C1MRDuse, C2MRDuse, RhoUse, TauUse):
-            if self.apply_fcut:
-                #if self.devPN is not None and self.devPN not in pn_labels:
-                    #return np.where(infreqs < self.PHI_fJoin_INS, PhiInspcoeffs['initial_phasing'] + PhiInspcoeffs['two_thirds']*(infreqs**(2./3.)) + PhiInspcoeffs['third']*(infreqs**(1./3.)) + PhiInspcoeffs['third_log']*(infreqs**(1./3.))*np.log(np.pi*infreqs)/3. + PhiInspcoeffs['log']*np.log(np.pi*infreqs)/3. + PhiInspcoeffs['min_third']*(infreqs**(-1./3.)) + PhiInspcoeffs['min_two_thirds']*(infreqs**(-2./3.)) + PhiInspcoeffs['min_one']/infreqs + PhiInspcoeffs['min_four_thirds']*(infreqs**(-4./3.)) + PhiInspcoeffs['min_five_thirds']*(infreqs**(-5./3.)) + (PhiInspcoeffs['one']*infreqs + PhiInspcoeffs['four_thirds']*(infreqs**(4./3.)) + PhiInspcoeffs['five_thirds']*(infreqs**(5./3.)) + PhiInspcoeffs['two']*infreqs*infreqs)/eta + PhiInspcoeffs['higher'], np.where(infreqs<fMRDJoinPh, (beta1*infreqs - beta3/(3.*infreqs*infreqs*infreqs) + beta2*np.log(infreqs))/eta + C1Int + C2Int*infreqs, np.where(infreqs < self.fcutPar, (-(alpha2/infreqs) + (4.0/3.0) * (alpha3 * (infreqs**(3./4.))) + alpha1 * infreqs + alpha4 * RhoUse * np.arctan((infreqs - alpha5 * fring)/(fdamp * RhoUse * TauUse)))/eta + C1MRDuse + C2MRDuse*infreqs,0.)))
-                #else:
-                return np.where(infreqs < self.PHI_fJoin_INS, PhiInspcoeffs['initial_phasing'] + PhiInspcoeffs['two_thirds']*(infreqs**(2./3.)) + PhiInspcoeffs['third']*(infreqs**(1./3.)) + PhiInspcoeffs['third_log']*(infreqs**(1./3.))*np.log(np.pi*infreqs)/3. + PhiInspcoeffs['log']*np.log(np.pi*infreqs)/3. + PhiInspcoeffs['min_third']*(infreqs**(-1./3.)) + PhiInspcoeffs['min_two_thirds']*(infreqs**(-2./3.)) + PhiInspcoeffs['min_one']/infreqs + PhiInspcoeffs['min_four_thirds']*(infreqs**(-4./3.)) + PhiInspcoeffs['min_five_thirds']*(infreqs**(-5./3.)) + (PhiInspcoeffs['one']*infreqs + PhiInspcoeffs['four_thirds']*(infreqs**(4./3.)) + PhiInspcoeffs['five_thirds']*(infreqs**(5./3.)) + PhiInspcoeffs['two']*infreqs*infreqs)/eta, np.where(infreqs<fMRDJoinPh, (beta1*infreqs - beta3/(3.*infreqs*infreqs*infreqs) + beta2*np.log(infreqs))/eta + C1Int + C2Int*infreqs, np.where(infreqs < self.fcutPar, (-(alpha2/infreqs) + (4.0/3.0) * (alpha3 * (infreqs**(3./4.))) + alpha1 * infreqs + alpha4 * RhoUse * np.arctan((infreqs - alpha5 * fring)/(fdamp * RhoUse * TauUse)))/eta + C1MRDuse + C2MRDuse*infreqs,0.)))
+
+            #Check if we have the extra term
+            try:
+                hp = _higher_p
+            except NameError:
+                hp = None
+
+            #Inspiral without extra term
+            inspiral_base = (
+                PhiInspcoeffs['initial_phasing'] +
+                PhiInspcoeffs['two_thirds']*(infreqs**(2./3.)) +
+                PhiInspcoeffs['third']*(infreqs**(1./3.)) +
+                PhiInspcoeffs['third_log']*(infreqs**(1./3.))*np.log(np.pi * infreqs)/3. +
+                PhiInspcoeffs['log']*np.log(np.pi*infreqs)/3. +
+                PhiInspcoeffs['min_third']*(infreqs**(-1./3.)) +
+                PhiInspcoeffs['min_two_thirds']*(infreqs**(-2./3.)) +
+                PhiInspcoeffs['min_one']/infreqs +
+                PhiInspcoeffs['min_four_thirds']*(infreqs**(-4./3.)) +
+                PhiInspcoeffs['min_five_thirds']*(infreqs**(-5./3.)) +
+                (PhiInspcoeffs['one']*infreqs +
+                PhiInspcoeffs['four_thirds']*(infreqs**(4./3.)) +
+                PhiInspcoeffs['five_thirds']*(infreqs**(5./3.)) +
+                PhiInspcoeffs['two']*infreqs*infreqs)/eta)
+    
+            #Adding the extra term
+            if hp is not None and 'higher' in PhiInspcoeffs:
+                higher_term = PhiInspcoeffs['higher']*(infreqs**hp)
+                inspiral_phase = inspiral_base + higher_term
             else:
-                #if self.devPN is not None and self.devPN not in pn_labels:
-                    #return np.where(infreqs < self.PHI_fJoin_INS, PhiInspcoeffs['initial_phasing'] + PhiInspcoeffs['two_thirds']*(infreqs**(2./3.)) + PhiInspcoeffs['third']*(infreqs**(1./3.)) + PhiInspcoeffs['third_log']*(infreqs**(1./3.))*np.log(np.pi*infreqs)/3. + PhiInspcoeffs['log']*np.log(np.pi*infreqs)/3. + PhiInspcoeffs['min_third']*(infreqs**(-1./3.)) + PhiInspcoeffs['min_two_thirds']*(infreqs**(-2./3.)) + PhiInspcoeffs['min_one']/infreqs + PhiInspcoeffs['min_four_thirds']*(infreqs**(-4./3.)) + PhiInspcoeffs['min_five_thirds']*(infreqs**(-5./3.)) + (PhiInspcoeffs['one']*infreqs + PhiInspcoeffs['four_thirds']*(infreqs**(4./3.)) + PhiInspcoeffs['five_thirds']*(infreqs**(5./3.)) + PhiInspcoeffs['two']*infreqs*infreqs)/eta + PhiInspcoeffs['higher'], np.where(infreqs<fMRDJoinPh, (beta1*infreqs - beta3/(3.*infreqs*infreqs*infreqs) + beta2*np.log(infreqs))/eta + C1Int + C2Int*infreqs, (-(alpha2/infreqs) + (4.0/3.0) * (alpha3 * (infreqs**(3./4.))) + alpha1 * infreqs + alpha4 * RhoUse * np.arctan((infreqs - alpha5 * fring)/(fdamp * RhoUse * TauUse)))/eta + C1MRDuse + C2MRDuse*infreqs))
-                #else:
-                return np.where(infreqs < self.PHI_fJoin_INS, PhiInspcoeffs['initial_phasing'] + PhiInspcoeffs['two_thirds']*(infreqs**(2./3.)) + PhiInspcoeffs['third']*(infreqs**(1./3.)) + PhiInspcoeffs['third_log']*(infreqs**(1./3.))*np.log(np.pi*infreqs)/3. + PhiInspcoeffs['log']*np.log(np.pi*infreqs)/3. + PhiInspcoeffs['min_third']*(infreqs**(-1./3.)) + PhiInspcoeffs['min_two_thirds']*(infreqs**(-2./3.)) + PhiInspcoeffs['min_one']/infreqs + PhiInspcoeffs['min_four_thirds']*(infreqs**(-4./3.)) + PhiInspcoeffs['min_five_thirds']*(infreqs**(-5./3.)) + (PhiInspcoeffs['one']*infreqs + PhiInspcoeffs['four_thirds']*(infreqs**(4./3.)) + PhiInspcoeffs['five_thirds']*(infreqs**(5./3.)) + PhiInspcoeffs['two']*infreqs*infreqs)/eta, np.where(infreqs<fMRDJoinPh, (beta1*infreqs - beta3/(3.*infreqs*infreqs*infreqs) + beta2*np.log(infreqs))/eta + C1Int + C2Int*infreqs, (-(alpha2/infreqs) + (4.0/3.0) * (alpha3 * (infreqs**(3./4.))) + alpha1 * infreqs + alpha4 * RhoUse * np.arctan((infreqs - alpha5 * fring)/(fdamp * RhoUse * TauUse)))/eta + C1MRDuse + C2MRDuse*infreqs))
+                inspiral_phase = inspiral_base
+    
+            if self.apply_fcut:
+                return np.where(infreqs < self.PHI_fJoin_INS, inspiral_phase, np.where(infreqs < fMRDJoinPh, (beta1*infreqs - beta3/(3.*infreqs*infreqs*infreqs) + beta2*np.log(infreqs))/eta + C1Int + C2Int*infreqs, np.where(infreqs < self.fcutPar,(-(alpha2/infreqs) + (4.0/3.0)*(alpha3*(infreqs**(3./4.))) + alpha1*infreqs + alpha4*RhoUse*np.arctan((infreqs - alpha5*fring)/(fdamp*RhoUse*TauUse)))/eta + C1MRDuse + C2MRDuse*infreqs, 0.0)))
+            
+            else:
+                return np.where(infreqs < self.PHI_fJoin_INS, inspiral_phase, np.where( infreqs < fMRDJoinPh, (beta1*infreqs - beta3/(3.*infreqs*infreqs*infreqs) + beta2*np.log(infreqs))/eta + C1Int + C2Int*infreqs, (-(alpha2/infreqs) + (4.0/3.0)*(alpha3*(infreqs**(3./4.)))+alpha1*infreqs + alpha4*RhoUse*np.arctan((infreqs - alpha5*fring)/(fdamp*RhoUse*TauUse)))/eta + C1MRDuse + C2MRDuse*infreqs))
+        
  
         def OnePointFiveSpinPN(infreqs, ChiS, ChiA):
             # PN amplitudes function, needed to scale

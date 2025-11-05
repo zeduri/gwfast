@@ -367,7 +367,7 @@ def DERSNR_McetadL_to_m1srcm2srcz(der_snr, ParNums, evParams, cosmo=Planck18):
 
 def main(idx, FLAGS):
 
-        idx=idx-1        
+        idx=idx-1
 
         ti=  time.time()
 
@@ -452,16 +452,14 @@ def main(idx, FLAGS):
             if FLAGS.prior_limits_params_names and FLAGS.prior_limits_params_values:
                 parpriors=dict(zip(FLAGS.prior_limits_params_names, FLAGS.prior_limits_params_values))
             else:
-                parpriors=None 
-
-
+                parpriors=None
 
             if parpriors is not None:
                 diag = onp.array([parpriors[key] if key in parpriors.keys() else 0. for key in parnums_or.keys()])
                 #pp   = onp.eye(FIM_use.shape[0])*diag
                 pp   = onp.eye(FIM_chunk.shape[0])*diag
                 if FIM_chunk.ndim==2:
-                    FIM_chunk = pp + FFIM_chunk
+                    FIM_chunk = pp + FIM_chunk
                 else:
                     FIM_chunk = pp[:,:,onp.newaxis] + FIM_chunk
 
@@ -505,6 +503,8 @@ def main(idx, FLAGS):
             termIII    = POPmodel.pop_function_hessian_termIII(ev_chunk, FIM_chunk, parnums,ParPrior=None)
             termIV     = POPmodel.pop_function_hessian_termIV(ev_chunk, FIM_chunk, Pdetder_chunk, parnums,ParPrior=None)
             termV      = POPmodel.pop_function_hessian_termV(ev_chunk, FIM_chunk, parnums,ParPrior=None)
+
+            print('\n\n\n termII', termII.shape)
                 
             to_file(termI_ders, termI_hess, termII, termIII, termIV, termV, FLAGS.fout, suff=suffstr)
             
@@ -603,6 +603,7 @@ if __name__ =='__main__':
     print('Loading SNRs from %s...' %fname_evSNRs)
     
     snrs_loaded = onp.loadtxt(fname_evSNRs)
+    
     if FLAGS.idx_f is None:
         snrs_loaded = snrs_loaded[FLAGS.idx_in:]
     else:
@@ -612,7 +613,7 @@ if __name__ =='__main__':
 
     if FLAGS.snr_th != FLAGS.snr_th_FIM:
         print('Using different SNR threshold for Pdet and FIM: %s and %s' %(FLAGS.snr_th, FLAGS.snr_th_FIM))
-        detected = snrs_loaded>FLAGS.snr_th_FIM
+        detected = snrs_loaded > FLAGS.snr_th_FIM
         events_loaded_use = {k: events_loaded[k][detected] for k in events_loaded.keys()}
         snrs_loaded = snrs_loaded[detected]
     else:
@@ -650,7 +651,10 @@ if __name__ =='__main__':
     
 
     
-    assert SNRderivativess_loaded.shape[-1] == len(events_loaded_use['dL']) == fishers_loaded.shape[-1] == len(snrs_loaded)
+    #assert SNRderivativess_loaded.shape[-1] == len(events_loaded_use['dL']) == fishers_loaded.shape[-1] == len(snrs_loaded)
+    if not (SNRderivativess_loaded.shape[-1] == len(events_loaded_use['dL']) == fishers_loaded.shape[-1] ==len(snrs_loaded)):
+        print("Shapes:", SNRderivativess_loaded.shape, len(events_loaded_use['dL']), fishers_loaded.shape, len(snrs_loaded))
+        raise AssertionError("Inconsistent shapes between SNR derivatives, events and FIMs")
 
 
     #####################################################################################
@@ -708,6 +712,7 @@ if __name__ =='__main__':
     pop_rec=POPmodel.pop_function(events_loaded_use,uselog=False)
 
     finite_indices=pop_rec>th
+    print('SELECTED INDX:', finite_indices)
     events_loaded_use = {k: events_loaded_use[k][finite_indices] for k in events_loaded_use.keys()}
     selected_indices = onp.where(finite_indices)[0]
     idx_sel=len(selected_indices)

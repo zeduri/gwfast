@@ -24,6 +24,7 @@ import numpy as onp
 import argparse
 import configparser
 import h5py
+import inspect
 
 from jax import jit
 
@@ -647,13 +648,22 @@ def main(idx, FLAGS):
 
         Net = get_net(FLAGS)
         
-        if FLAGS.wf_model.split('-')[0] !=  'LAL':
-            wf_model = wf_models_dict[ FLAGS.wf_model]
+        if FLAGS.wf_model.split('-')[0] != 'LAL':
+            wf_model = wf_models_dict[FLAGS.wf_model]
             
-            if FLAGS.devPN is not None and FLAGS.wf_model.startswith('IMRPhenomHM'):
-                wf_model = IMRPhenomHM(devPN=FLAGS.devPN)
-    
-            wf_model_name =  type(wf_model).__name__
+            if FLAGS.devPN is not None:
+                wf_class = wf_model.__class__  # ottieni la classe dell’oggetto
+                sig = inspect.signature(wf_class.__init__)  # controlla i parametri del costruttore
+                if 'devPN' in sig.parameters:
+                    wf_model = wf_class(devPN=FLAGS.devPN)  # ricrea l’oggetto con devPN
+                    print("Recreated waveform with deltaPN parameter!")
+                else:
+                    print(f" Waveform {wf_class.__name__} does not support devPN, proceeding without it.")
+            else:
+                print(f"Using waveform {type(wf_model).__name__} without deltaPN.")
+                    
+            wf_model_name = type(wf_model).__name__
+
         else:
             is_tidal, is_prec, is_HM, is_ecc = False, False, False, False
             if 'tidal' in FLAGS.lalargs:

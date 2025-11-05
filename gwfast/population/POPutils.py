@@ -1171,6 +1171,37 @@ def open_catalog(path_pdraw,path_single_FIMs,idx_i,idx_f,popterms=False,path_pop
         return N_samp,theta_samples,rho,der_snr,FIMs,termI_der,termI_hess,termII,termIII,termIV,termV
 
 
+def open_catalog_simple(path_pdraw,path_single_FIMs,idx_i,idx_f,popterms=False,path_pop_terms=None):
+    #path_pdraw: path to the folder containing the file pdraw.h5
+    #path_single_FIMs to folder SingleEventFishers containing the outputs of gwfast: all_derivatives_SNR_{idx_i}_to_{idx_f}.hdf5,fishers_{idx_i}_to_{idx_f}.npy,snrs_{idx_i}_to_{idx_f}.txt
+    '''
+    Function to load stuff
+    '''
+    path_MC_samples=path_pdraw+f'pdraw.h5'
+    path_snrs_txt =path_single_FIMs+f'snrs_{idx_i}_to_{idx_f}.txt'
+    
+            
+    theta_samples=open_h5py(path_MC_samples)
+    N_samp=len(theta_samples['Mc'])
+    print('N draw=',N_samp)
+    rho=np.loadtxt(path_snrs_txt)
+    if popterms==False:
+        '''
+        if you want to load the number of events, the theta samples and snr
+        '''
+        assert rho.shape[0]==theta_samples['Mc'].shape[0]
+        return N_samp,theta_samples,rho
+    elif popterms==True:
+        if path_pop_terms is None:
+            raise ValueError("path_pop_terms not defined, but popterms=True requires path_pop_terms.")
+        '''
+        if you want to load also the integrands of GammaII-GammaIII
+        '''
+        termI_der=np.load(path_pop_terms+f'termI_der_{idx_i}_to_{idx_f}.npy')
+        termI_hess=np.load(path_pop_terms+f'termI_hess_{idx_i}_to_{idx_f}.npy')
+        assert rho.shape[0]==theta_samples['Mc'].shape[0]
+        return N_samp,theta_samples,rho,termI_der,termI_hess
+
 
 def plot_mass_rate_spin_delta_distributions(p_pop,p_draw=None,samples_pdraw=None,samples_pop=None):
     '''

@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 
 
 from gwfast.population.POPmodels import *
-from gwfast.population.POPutils import open_h5py,open_catalog,load_SNRders,print_diagonal_elements
+from gwfast.population.POPutils import open_h5py,open_catalog, open_catalog_simple, load_SNRders,print_diagonal_elements
 
 
 
@@ -26,7 +26,8 @@ class FisherMatrixCalculator(object):
                  path_pdraw,
                  path_single_FIMs,
                  path_pop_terms,
-                 idx_i,idx_f):
+                 idx_i,idx_f,
+                 simple=0):
         r"""
         Parameters:
         :param population_model_injection: injection distribution p_draw(\theta).
@@ -54,21 +55,32 @@ class FisherMatrixCalculator(object):
         self.idx_f=idx_f
 
         #load pdraw samples, snrs, derivatives of snr, single event fisher matrices, and the integrands provided by the module gwfast.population.calculate_hyperpar_derivatives_from_catalog
-        N_samp,theta_samples,snr,der_snr,FIMs,termI_der,termI_hess,termII,termIII,termIV,termV=open_catalog(path_pdraw,path_single_FIMs,idx_i,idx_f,popterms=True,path_pop_terms=path_pop_terms)
-        self.pop_inj=self.POP_inj.pop_function(theta_samples,uselog=False)
-        self.pop_rec=self.POP_rec.pop_function(theta_samples,uselog=False)
-        self.N_samp=N_samp #number of MC samples
-        self.theta_samples=theta_samples #MC samples from pdraw
-        self.snr=snr
-        self.snr_th=snr_th
-        self.der_snr=der_snr
-        self.FIMs=FIMs
-        self.termI_der=termI_der
-        self.termI_hess=termI_hess
-        self.termII=termII
-        self.termIII=termIII
-        self.termIV=termIV
-        self.termV=termV
+        if simple == 0:
+            N_samp,theta_samples,snr,der_snr,FIMs,termI_der,termI_hess,termII,termIII,termIV,termV=open_catalog(path_pdraw,path_single_FIMs,idx_i,idx_f,popterms=True,path_pop_terms=path_pop_terms)
+            self.pop_inj=self.POP_inj.pop_function(theta_samples,uselog=False)
+            self.pop_rec=self.POP_rec.pop_function(theta_samples,uselog=False)
+            self.N_samp=N_samp #number of MC samples
+            self.theta_samples=theta_samples #MC samples from pdraw
+            self.snr=snr
+            self.snr_th=snr_th
+            self.der_snr=der_snr
+            self.FIMs=FIMs
+            self.termI_der=termI_der
+            self.termI_hess=termI_hess
+            self.termII=termII
+            self.termIII=termIII
+            self.termIV=termIV
+            self.termV=termV
+        elif simple==1:
+            N_samp,theta_samples,snr,termI_der,termI_hess=open_catalog_simple(path_pdraw,path_single_FIMs,idx_i,idx_f,popterms=True,path_pop_terms=path_pop_terms)
+            self.pop_inj=self.POP_inj.pop_function(theta_samples,uselog=False)
+            self.pop_rec=self.POP_rec.pop_function(theta_samples,uselog=False)
+            self.N_samp=N_samp #number of MC samples
+            self.theta_samples=theta_samples #MC samples from pdraw
+            self.snr=snr
+            self.snr_th=snr_th
+            self.termI_der=termI_der
+            self.termI_hess=termI_hess
         
     
 
@@ -83,6 +95,13 @@ class FisherMatrixCalculator(object):
         Parameters:
         :return array of shape (len(N_samp),)
         """
+
+        #mask = (self.snr > self.snr_th) & (self.pop_inj > 1e-12)
+        #pdet = np.zeros_like(self.snr)
+        #pdet[mask] = 0.5 * erfc((self.snr_th - self.snr[mask]) / (np.sqrt(2) * sigma))
+        
+        #return pdet[mask]
+        
         return 0.5* erfc((self.snr_th-self.snr)/(np.sqrt(2)*sigma))
     
 
@@ -100,6 +119,12 @@ class FisherMatrixCalculator(object):
         :param array pdet_theta: detection probability.
         :return float: selection effects.
         """
+
+        #mask = (self.snr > self.snr_th) & (self.pop_inj > 1e-12)
+        #if np.sum(mask) == 0:
+        #    return 0.0
+        #    
+        #return (1 / self.N_samp) * np.sum(pdet_theta[mask] * self.pop_rec[mask] / self.pop_inj[mask])
 
         return (1 / self.N_samp)*np.sum(pdet_theta*self.pop_rec/self.pop_inj)
 
@@ -166,6 +191,9 @@ class FisherMatrixCalculator(object):
         Returns:
         :return ndarray: Array of shape (N_hyper, N_hyper) containing the regularized integrals.
         """
+        print('arg shape:', arg.shape)
+        print('arg mean:', np.mean(arg), 'arg std:', np.std(arg))
+        print('min:', np.min(arg), 'max:', np.max(arg))
         
         print('Chosen quantile range:', quantile_range)
         low, up = np.zeros(self.N_hyperpar), np.zeros(self.N_hyperpar)
@@ -173,7 +201,8 @@ class FisherMatrixCalculator(object):
         index = []
         for i in range(self.N_hyperpar):
             low[i], up[i] = np.quantile(arg[i][i], quantile_range)
-            mask.append(np.logical_and(arg[i][i] > low[i], arg[i][i] < up[i]))
+            mask.append(np.logical_and(arg[i][i] >= low[i], arg[i][i] <= up[i]))
+            print(f"[{i}] low={low[i]:.3e}, up={up[i]:.3e}, kept fraction={np.mean(mask[i]):.3f}")
             index.append(np.where(mask[i] == False)[0])  
         unique_index = np.array(list(set(np.hstack(index)))) 
         print('Removed elements:', len(unique_index))
@@ -254,10 +283,9 @@ class FisherMatrixCalculator(object):
             plt.show()
             plt.close()
         return I
-        
 
 
-    def compute_POPFisher(self,save_MC_args=True):
+    def compute_POPFisher(self,save_MC_args=True,simple=0):
         r"""
         Function to compute the population Fisher matrix Gamma_Lambda.
         Parameters:
@@ -281,30 +309,38 @@ class FisherMatrixCalculator(object):
         Gamma_I=self.N_samp**-1*np.sum(arg1,axis=-1)
         #Gamma_I=self.N_samp**-1*A/pdet_lambda
         print('...First term computed...')
+
+        if simple == 0:
         
-        B=0.5*self.termII
-        arg2=B*pdet_theta/pdet_lambda*div
-        Gamma_II=self.N_samp**-1*np.sum(arg2,axis=-1)
-        print('...Second  term computed...')
-        
-        C=-0.5*self.termIII
-        arg3=C/pdet_lambda*div
-        Gamma_III=self.N_samp**-1*np.sum(arg3,axis=-1)
-        print('...Third term computed...')
-        
-        D=-self.termIV
-        arg4=D/pdet_lambda*div
-        Gamma_IV=self.N_samp**-1*np.sum(arg4,axis=-1)
-        print('...Fourth term computed ...')
-        
-        E=-0.5*self.termV
-        arg5=E*pdet_theta/pdet_lambda*div
-        Gamma_V=self.N_samp**-1*np.sum(arg5,axis=-1)
-        print('...Fifth term computed...')
-        if save_MC_args==False:
-            return Gamma_I,Gamma_II,Gamma_III,Gamma_IV,Gamma_V
-        elif save_MC_args==True:
-            return Gamma_I,Gamma_II,Gamma_III,Gamma_IV,Gamma_V,arg1,arg2,arg3,arg4,arg5
+            B=0.5*self.termII
+            arg2=B*pdet_theta/pdet_lambda*div
+            Gamma_II=self.N_samp**-1*np.sum(arg2,axis=-1)
+            print('...Second  term computed...')
+            
+            C=-0.5*self.termIII
+            arg3=C/pdet_lambda*div
+            Gamma_III=self.N_samp**-1*np.sum(arg3,axis=-1)
+            print('...Third term computed...')
+            
+            D=-self.termIV
+            arg4=D/pdet_lambda*div
+            Gamma_IV=self.N_samp**-1*np.sum(arg4,axis=-1)
+            print('...Fourth term computed ...')
+            
+            E=-0.5*self.termV
+            arg5=E*pdet_theta/pdet_lambda*div
+            Gamma_V=self.N_samp**-1*np.sum(arg5,axis=-1)
+            print('...Fifth term computed...')
+            if save_MC_args==False:
+                return Gamma_I,Gamma_II,Gamma_III,Gamma_IV,Gamma_V
+            elif save_MC_args==True:
+                return Gamma_I,Gamma_II,Gamma_III,Gamma_IV,Gamma_V,arg1,arg2,arg3,arg4,arg5
+
+        elif simple == 1:
+            if save_MC_args==False:
+                return Gamma_I
+            elif save_MC_args==True:
+                return Gamma_I,arg1
 
 
 
