@@ -76,7 +76,6 @@ class WaveFormModel(ABC):
         
         # Dictionary containing the order in which the parameters will appear in the Fisher matrix
         self.ParNums = {'Mc':0, 'eta':1, 'dL':2, 'theta':3, 'phi':4, 'iota':5, 'psi':6, 'tcoal':7, 'Phicoal':8, 'chiS':9,  'chiA':10}
-        #self.ParNums = {'Mc':0, 'eta':1, 'dL':2, 'theta':3, 'phi':4, 'iota':5, 'psi':6, 'tcoal':7, 'Phicoal':8, 'chiS':9,  'chiA':10, 'deltaPN1':11}
         """
         Dictionary containing the number of the rows/columns in which the parameters will appear in the Fisher matrix.
         
