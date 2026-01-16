@@ -997,7 +997,7 @@ class TaylorF2_RestrictedPN(WaveFormModel):
             return Om_ISCO/(np.pi*Mfin*glob.GMsun_over_c3)
 
 ##############################################################################
-# IMRPhenomD WAVEFORM
+# IMRPhenomD WAVEFORM MOD
 ##############################################################################
 
 class IMRPhenomD(WaveFormModel):
@@ -1014,7 +1014,7 @@ class IMRPhenomD(WaveFormModel):
         
     """
     # All is taken from LALSimulation and arXiv:1508.07250, arXiv:1508.07253
-    def __init__(self, devPN=None, fRef=None, **kwargs):
+    def __init__(self, devPN=0, orderPN=None, fRef=None, **kwargs):
         """
         Constructor method
         """
@@ -1027,6 +1027,7 @@ class IMRPhenomD(WaveFormModel):
         
         self.fRef = fRef
         self.devPN = devPN
+        self.orderPN = orderPN
         
         super().__init__('BBH', fcutPar, **kwargs)
         
@@ -1034,13 +1035,36 @@ class IMRPhenomD(WaveFormModel):
         self.QNMgrid_fring = onp.loadtxt(os.path.join(glob.WFfilesPath, 'QNMData_fring.txt'))
         self.QNMgrid_fdamp = onp.loadtxt(os.path.join(glob.WFfilesPath, 'QNMData_fdamp.txt'))
 
-        if self.devPN is not None:
-            self.ParNums['deltaPN'] = self.nParams
-            self.nParams += 1
+        pn_ord = {0: 'Phi_0', 1: 'Phi_1', 2: 'Phi_2', 3: 'Phi_3', 4: 'Phi_4', 5: 'Phi_5', 6: 'Phi_6', 7: 'Phi_7'}
+
+        if self.devPN > 0:
+            print('Switching on PN deviations')
+            if isinstance(self.orderPN, int):
+                orders_to_process = [self.orderPN]
+                print(f'Adding 1 PN deviation')
+            else:
+                orders_to_process = self.orderPN
+                print(f'Adding mutiple PN deviations')
+            #Controlla se il numero di parametri attesi corrisponde
+            if len(orders_to_process) != self.devPN:
+                print(f"self.devPN is {self.devPN},but n =  {len(orders_to_process)} orders were given in self.orderPN.")
+                raise ValueError("Different numbers given!")
+        
+            for key in orders_to_process:
+                if key in pn_ord:
+                    param_name = pn_ord[key]
+                    self.ParNums[param_name] = self.nParams
+                    self.nParams += 1
+                else:
+                    raise ValueError("ERROR!")
+
+        #if self.devPN is not None:
+            #self.ParNums['deltaPN'] = self.nParams
+            #self.nParams += 1
                
-        pn_labels = {0: 'zero', 1: 'one', 2: 'two', 3: 'three', 4: 'four', 5: 'five', 6: 'six', 7: 'seven'}
-        if self.devPN is not None and self.devPN not in pn_labels:
-            print('Adding the ', self.devPN/2, 'pPN order deviation')
+        #pn_labels = {0: 'zero', 1: 'one', 2: 'two', 3: 'three', 4: 'four', 5: 'five', 6: 'six', 7: 'seven'}
+        #if self.devPN is not None and self.devPN not in pn_labels:
+            #print('Adding the ', self.devPN/2, 'pPN order deviation')
         
     def Phi(self, f, **kwargs):
         """
@@ -1130,28 +1154,53 @@ class IMRPhenomD(WaveFormModel):
         TF2coeffs['six'] = TF2coeffs['six'] - ((326.75/1.12 + 557.5/1.8*eta)*eta*chi1dotchi2 + ((4703.5/8.4+2935./6.*m1ByM-120.*m1ByM*m1ByM) + (-4108.25/6.72-108.5/1.2*m1ByM+125.5/3.6*m1ByM*m1ByM))*m1ByM*m1ByM*chi12 + ((4703.5/8.4+2935./6.*m2ByM-120.*m2ByM*m2ByM) + (-4108.25/6.72-108.5/1.2*m2ByM+125.5/3.6*m2ByM*m2ByM))*m2ByM*m2ByM*chi22)
 
         #Adding the PPN deviations
-        pn_labels = {0: 'zero', 1: 'one', 2: 'two', 3: 'three', 4: 'four', 5: 'five', 6: 'six', 7: 'seven'}
+        #pn_labels = {0: 'zero', 1: 'one', 2: 'two', 3: 'three', 4: 'four', 5: 'five', 6: 'six', 7: 'seven'}
         
-        if self.devPN is None:
-            pass
-        elif self.devPN is not None:
-            if 'deltaPN' not in kwargs:
-                raise ValueError('Expected deltaPN parameter in the event catalog!')
-            elif self.devPN not in pn_labels:
+        #if self.devPN is None:
+            #pass
+        #elif self.devPN is not None:
+            #if 'deltaPN' not in kwargs:
+                #raise ValueError('Expected deltaPN parameter in the event catalog!')
+           # elif self.devPN not in pn_labels:
                 #Adding deviations for terms not in the code yet
-                TF2coeffs['higher'] = kwargs['deltaPN']
-            else:
-                key = pn_labels[self.devPN]
+                #TF2coeffs['higher'] = kwargs['deltaPN']
+            #else:
+                #key = pn_labels[self.devPN]
                 #for devPN==1 the whole coeff is just our deviation:
-                if self.devPN == 1: 
-                    TF2coeffs['one'] = kwargs['deltaPN']
+                #if self.devPN == 1: 
+                    #TF2coeffs['one'] = kwargs['deltaPN']
                 #Every other case:
-                else:
-                    TF2coeffs[key] = (1 + kwargs['deltaPN']) * TF2coeffs[key]
-                    if self.devPN == 5:
-                        TF2coeffs['five_log'] = (1 + kwargs['deltaPN']) * TF2coeffs['five_log']
-                    elif self.devPN == 6:
-                        TF2coeffs['six_log'] = (1 + kwargs['deltaPN']) * TF2coeffs['six_log']
+                #else:
+                    #TF2coeffs[key] = (1 + kwargs['deltaPN']) * TF2coeffs[key]
+                    #if self.devPN == 5:
+                        #TF2coeffs['five_log'] = (1 + kwargs['deltaPN']) * TF2coeffs['five_log']
+                    #elif self.devPN == 6:
+                        #TF2coeffs['six_log'] = (1 + kwargs['deltaPN']) * TF2coeffs['six_log']
+
+        pn_param_names = {0: 'Phi_0', 1: 'Phi_1', 2: 'Phi_2', 3: 'Phi_3', 4: 'Phi_4', 5: 'Phi_5', 6: 'Phi_6', 7: 'Phi_7'}
+        #Mappa dall'ordine numerico alla chiave del coefficiente in TF2coeffs
+        coeff_keys = {0: 'zero', 1: 'one', 2: 'two', 3: 'three', 4: 'four', 5: 'five', 6: 'six', 7: 'seven'}
+        replacement_orders = {1} #In this case TF2coeffs = 0, so the whole coeff is the deviation
+        
+        if isinstance(self.orderPN, int):
+            active_orders = [self.orderPN]
+        else:
+            active_orders = self.orderPN
+        
+        if self.devPN > 0:
+            for order in active_orders:
+                param_name = pn_param_names.get(order)
+                coeff_key = coeff_keys.get(order)
+                if coeff_key in TF2coeffs:
+                    #print('ADDING THE DEVIATION')
+                    phi_value = kwargs[param_name]
+                    if phi_value is None:
+                        phi_value = 0.0
+                    
+                    if order in replacement_orders:
+                        TF2coeffs[coeff_key]=phi_value
+                    else:
+                        TF2coeffs[coeff_key]=TF2coeffs[coeff_key]*(1+phi_value)
 
         # Now translate into inspiral coefficients, label with the power in front of which they appear
         PhiInspcoeffs = {}
@@ -1173,10 +1222,10 @@ class IMRPhenomD(WaveFormModel):
 
         #Building the 'extra' PhiInspCoeff
         _higher_p = None
-        if self.devPN is not None and self.devPN not in pn_labels and self.devPN != 1 and 'higher' in TF2coeffs:
-            devp = float(self.devPN)
-            _higher_p = (devp-5.0)/3.0
-            PhiInspcoeffs['higher'] = TF2coeffs['higher']*TF2OverallAmpl*(np.pi**(_higher_p))
+        #if self.devPN is not None and self.devPN not in pn_labels and self.devPN != 1 and 'higher' in TF2coeffs:
+            #devp = float(self.devPN)
+            #_higher_p = (devp-5.0)/3.0
+            #PhiInspcoeffs['higher'] = TF2coeffs['higher']*TF2OverallAmpl*(np.pi**(_higher_p))
         
         #Now compute the coefficients to align the three parts
         
@@ -1938,7 +1987,7 @@ class IMRPhenomD_NRTidalv2(WaveFormModel):
         return f_end_taper/(M*glob.GMsun_over_c3)
 
 ##############################################################################
-# IMRPhenomHM WAVEFORM
+# IMRPhenomHM WAVEFORM MOD
 ##############################################################################
 
 class IMRPhenomHM(WaveFormModel):
@@ -1959,7 +2008,7 @@ class IMRPhenomHM(WaveFormModel):
         
     """
     # All is taken from LALSimulation and arXiv:1508.07250, arXiv:1508.07253, arXiv:1708.00404, arXiv:1909.10010
-    def __init__(self, fRef=None, devPN=None, **kwargs):
+    def __init__(self, fRef=None, devPN=0, orderPN=None, **kwargs):
         """
         Constructor method
         """
@@ -1972,19 +2021,62 @@ class IMRPhenomHM(WaveFormModel):
         
         self.fRef = fRef
         self.devPN = devPN
+        self.orderPN = orderPN
         
         super().__init__('BBH', fcutPar, is_HigherModes=True, **kwargs)
 
-        #Adding the deltaPN parameter 
-        if self.devPN is not None:
-            self.ParNums['deltaPN'] = self.nParams
-            self.nParams += 1
+        #Adding the deltaPN parameter
+        pn_ord = {0: 'Phi_0', 1: 'Phi_1', 2: 'Phi_2', 3: 'Phi_3', 4: 'Phi_4', 5: 'Phi_5', 6: 'Phi_6', 7: 'Phi_7'}
+
+        if self.devPN > 0:
+            print('Switching on PN deviations')
+            if isinstance(self.orderPN, int):
+                orders_to_process = [self.orderPN]
+                print(f'Adding 1 PN deviation')
+            else:
+                orders_to_process = self.orderPN
+                print(f'Adding mutiple PN deviations')
+            # Controlla se il numero di parametri attesi corrisponde
+            if len(orders_to_process) != self.devPN:
+                print(f"self.devPN is {self.devPN},but n =  {len(orders_to_process)} orders were given in self.orderPN.")
+                raise ValueError("Different numbers given!")
+        
+            for key in orders_to_process:
+                if key in pn_ord:
+                    param_name = pn_ord[key]
+                    self.ParNums[param_name] = self.nParams
+                    self.nParams += 1
+                else:
+                    raise ValueError("ERROR!")
+
+        #if self.devPN == 1:
+            #self.ParNums['Phi_0'] = self.nParams
+            #self.nParams += 1
+            #self.ParNums['Phi_1'] = self.nParams
+            #self.nParams += 1
+            #self.ParNums['Phi_2'] = self.nParams
+            #self.nParams += 1
+            #self.ParNums['Phi_3'] = self.nParams
+            #self.nParams += 1
+            #self.ParNums['Phi_4'] = self.nParams
+            #self.nParams += 1
+            #self.ParNums['Phi_5'] = self.nParams
+            #self.nParams += 1
+            #self.ParNums['Phi_6'] = self.nParams
+            #self.nParams += 1
+            #self.ParNums['Phi_7'] = self.nParams
+            #self.nParams += 1
+
+            
+        #if self.devPN is not None:
+            #self.ParNums['deltaPN'] = self.nParams
+            #self.nParams += 1
                  
-        pn_labels = {0: 'zero', 1: 'one', 2: 'two', 3: 'three', 4: 'four', 5: 'five', 6: 'six', 7: 'seven'}
+        #pn_labels = {0: 'zero', 1: 'one', 2: 'two', 3: 'three', 4: 'four', 5: 'five', 6: 'six', 7: 'seven'}
 
         #Printing that we are adding en 'extra' PN coeff
-        if self.devPN is not None and self.devPN not in pn_labels:
-            print('Adding the ', self.devPN/2, 'PPN order deviation')
+        #if self.devPN is not None and self.devPN not in pn_labels:
+            #print('Adding the ', self.devPN/2, 'PPN order deviation')
         
         # List of phase shifts: the index is the azimuthal number m
         self.complShiftm = np.array([0., np.pi*0.5, 0., -np.pi*0.5, np.pi, np.pi*0.5, 0.])
@@ -2079,29 +2171,77 @@ class IMRPhenomHM(WaveFormModel):
         # Remove this part since it was not available when IMRPhenomD was tuned
         TF2coeffs['six'] = TF2coeffs['six'] - ((326.75/1.12 + 557.5/1.8*eta)*eta*chi1dotchi2 + ((4703.5/8.4+2935./6.*m1ByM-120.*m1ByM*m1ByM) + (-4108.25/6.72-108.5/1.2*m1ByM+125.5/3.6*m1ByM*m1ByM))*m1ByM*m1ByM*chi12 + ((4703.5/8.4+2935./6.*m2ByM-120.*m2ByM*m2ByM) + (-4108.25/6.72-108.5/1.2*m2ByM+125.5/3.6*m2ByM*m2ByM))*m2ByM*m2ByM*chi22)
 
-        #Adding the deviation
-        pn_labels = {0: 'zero', 1: 'one', 2: 'two', 3: 'three', 4: 'four', 5: 'five', 6: 'six', 7: 'seven'}
+        ##Adding the deviation
+        #pn_labels = {0: 'zero', 1: 'one', 2: 'two', 3: 'three', 4: 'four', 5: 'five', 6: 'six', 7: 'seven'}
                 
-        if self.devPN is None:
-            pass
-        elif self.devPN is not None:
-            if 'deltaPN' not in kwargs:
-                raise ValueError('Expected deltaPN parameter in the event catalog!')
-            elif self.devPN not in pn_labels:
+        #if self.devPN is None:
+        #    pass
+        #elif self.devPN is not None:
+            #if 'deltaPN' not in kwargs:
+                #raise ValueError('Expected deltaPN parameter in the event catalog!')
+            #elif self.devPN not in pn_labels:
                 #Adding the 'extra' term
-                TF2coeffs['higher'] = kwargs['deltaPN']
-            else:
-                key = pn_labels[self.devPN]
-                if self.devPN == 1:
+                #TF2coeffs['higher'] = kwargs['deltaPN']
+            #else:
+                #key = pn_labels[self.devPN]
+                #if self.devPN == 1:
                     #If devPN==1 the whole coeff is the deviation 
-                    TF2coeffs['one'] = kwargs['deltaPN']
-                else:
+                    #TF2coeffs['one'] = kwargs['deltaPN']
+                #else:
                     #Every other case:
-                    TF2coeffs[key] = (1 + kwargs['deltaPN'])*TF2coeffs[key]
-                    if self.devPN == 5:
-                        TF2coeffs['five_log'] = (1 + kwargs['deltaPN'])*TF2coeffs['five_log']
-                    elif self.devPN == 6:
-                        TF2coeffs['six_log'] = (1 + kwargs['deltaPN'])*TF2coeffs['six_log']
+                    #TF2coeffs[key] = (1 + kwargs['deltaPN'])*TF2coeffs[key]
+                    #if self.devPN == 5:
+                        #TF2coeffs['five_log'] = (1 + kwargs['deltaPN'])*TF2coeffs['five_log']
+                    #elif self.devPN == 6:
+                        #TF2coeffs['six_log'] = (1 + kwargs['deltaPN'])*TF2coeffs['six_log']
+
+        
+        #if self.devPN == 1:
+            #Phi_0 = kwargs.get('Phi_0', 0.0)
+            #TF2coeffs['zero'] = TF2coeffs['zero']*(1+Phi_0)
+            #Phi_1 = kwargs.get('Phi_1', 0.0)
+            #TF2coeffs['one'] = Phi_1
+            #Phi_2 = kwargs.get('Phi_2', 0.0)
+            #TF2coeffs['two'] = TF2coeffs['two']*(1+Phi_2)
+            #Phi_3 = kwargs.get('Phi_3', 0.0)
+            #TF2coeffs['three'] = TF2coeffs['three']*(1+Phi_3)
+            #Phi_4 = kwargs.get('Phi_4', 0.0)
+            #TF2coeffs['four'] = TF2coeffs['four']*(1+Phi_4)
+            #Phi_5 = kwargs.get('Phi_5', 0.0)
+            #TF2coeffs['five'] = TF2coeffs['five']*(1+Phi_5)
+            #TF2coeffs['five_log'] = TF2coeffs['five_log']*(1+Phi_5)
+            #Phi_6 = kwargs.get('Phi_6', 0.0)
+            #TF2coeffs['six'] = TF2coeffs['six']*(1+Phi_6)
+            #TF2coeffs['six_log'] = TF2coeffs['six_log']*(1+Phi_6)
+            #Phi_7 = kwargs.get('Phi_7', 0.0)
+            #TF2coeffs['seven'] = TF2coeffs['seven']*(1+Phi_7)
+
+
+        pn_param_names = {0: 'Phi_0', 1: 'Phi_1', 2: 'Phi_2', 3: 'Phi_3', 4: 'Phi_4', 5: 'Phi_5', 6: 'Phi_6', 7: 'Phi_7'}
+        # Mappa dall'ordine numerico alla chiave del coefficiente in TF2coeffs
+        coeff_keys = {0: 'zero', 1: 'one', 2: 'two', 3: 'three', 4: 'four', 5: 'five', 6: 'six', 7: 'seven'}
+        replacement_orders = {1} #In this case TF2coeffs = 0, so the whole coeff is the deviation
+        
+        if isinstance(self.orderPN, int):
+            active_orders = [self.orderPN]
+        else:
+            active_orders = self.orderPN
+        
+        if self.devPN > 0:
+            for order in active_orders:
+                param_name = pn_param_names.get(order)
+                coeff_key = coeff_keys.get(order)
+                if coeff_key in TF2coeffs:
+                    #print('ADDING THE DEVIATION')
+                    phi_value = kwargs[param_name]
+                    if phi_value is None:
+                        phi_value = 0.0
+                    
+                    if order in replacement_orders:
+                        TF2coeffs[coeff_key]=phi_value
+                    else:
+                        TF2coeffs[coeff_key]=TF2coeffs[coeff_key]*(1+phi_value)
+                    #print('DONE')
 
             
         # Now translate into inspiral coefficients, label with the power in front of which they appear
@@ -2124,10 +2264,10 @@ class IMRPhenomHM(WaveFormModel):
 
         #Computing the PhiInspcoeffs for the 'extra' term
         _higher_p = None
-        if self.devPN is not None and self.devPN not in pn_labels and self.devPN != 1 and 'higher' in TF2coeffs:
-            devp = float(self.devPN)
-            _higher_p = (devp-5.0)/3.0
-            PhiInspcoeffs['higher'] = TF2coeffs['higher']*TF2OverallAmpl*(np.pi**(_higher_p))
+        #if self.devPN is not None and self.devPN not in pn_labels and self.devPN != 1 and 'higher' in TF2coeffs:
+            #devp = float(self.devPN)
+            #_higher_p = (devp-5.0)/3.0
+            #PhiInspcoeffs['higher'] = TF2coeffs['higher']*TF2OverallAmpl*(np.pi**(_higher_p))
 
 
         fInsJoin = self.PHI_fJoin_INS
@@ -2569,25 +2709,71 @@ class IMRPhenomHM(WaveFormModel):
         TF2coeffs['six'] = TF2coeffs['six'] - ((326.75/1.12 + 557.5/1.8*eta)*eta*chi1dotchi2 + ((4703.5/8.4+2935./6.*m1ByM-120.*m1ByM*m1ByM) + (-4108.25/6.72-108.5/1.2*m1ByM+125.5/3.6*m1ByM*m1ByM))*m1ByM*m1ByM*chi12 + ((4703.5/8.4+2935./6.*m2ByM-120.*m2ByM*m2ByM) + (-4108.25/6.72-108.5/1.2*m2ByM+125.5/3.6*m2ByM*m2ByM))*m2ByM*m2ByM*chi22)
 
         #Adding PPN deviations:
-        pn_labels = {0: 'zero', 1: 'one', 2: 'two', 3: 'three', 4: 'four', 5: 'five', 6: 'six', 7: 'seven'}
+        #pn_labels = {0: 'zero', 1: 'one', 2: 'two', 3: 'three', 4: 'four', 5: 'five', 6: 'six', 7: 'seven'}
         
-        if self.devPN is None:
-            pass
-        elif self.devPN is not None:
-            if 'deltaPN' not in kwargs:
-                raise ValueError('Expected deltaPN parameter in the event catalog!')
-            elif self.devPN not in pn_labels:
-                TF2coeffs['higher'] = kwargs['deltaPN']
-            else:
-                key = pn_labels[self.devPN]
-                if self.devPN == 1:
-                    TF2coeffs['one'] = kwargs['deltaPN']
-                else:
-                    TF2coeffs[key] = (1 + kwargs['deltaPN']) * TF2coeffs[key]
-                    if self.devPN == 5:
-                        TF2coeffs['five_log'] = (1 + kwargs['deltaPN']) * TF2coeffs['five_log']
-                    elif self.devPN == 6:
-                        TF2coeffs['six_log'] = (1 + kwargs['deltaPN']) * TF2coeffs['six_log']
+        #if self.devPN is None:
+            #pass
+        #elif self.devPN is not None:
+            #if 'deltaPN' not in kwargs:
+                #raise ValueError('Expected deltaPN parameter in the event catalog!')
+            #elif self.devPN not in pn_labels:
+                #TF2coeffs['higher'] = kwargs['deltaPN']
+            #else:
+                #key = pn_labels[self.devPN]
+                #if self.devPN == 1:
+                    #TF2coeffs['one'] = kwargs['deltaPN']
+                #else:
+                    #TF2coeffs[key] = (1 + kwargs['deltaPN']) * TF2coeffs[key]
+                    #if self.devPN == 5:
+                        #TF2coeffs['five_log'] = (1 + kwargs['deltaPN']) * TF2coeffs['five_log']
+                    #elif self.devPN == 6:
+                        #TF2coeffs['six_log'] = (1 + kwargs['deltaPN']) * TF2coeffs['six_log']
+        
+        #if self.devPN == 1:
+            #Phi_0 = kwargs.get('Phi_0', 0.0)
+            #TF2coeffs['zero'] = TF2coeffs['zero']*(1+Phi_0)
+            #Phi_1 = kwargs.get('Phi_1', 0.0)
+            #TF2coeffs['one'] = Phi_1
+            #Phi_2 = kwargs.get('Phi_2', 0.0)
+            #TF2coeffs['two'] = TF2coeffs['two']*(1+Phi_2)
+            #Phi_3 = kwargs.get('Phi_3', 0.0)
+            #TF2coeffs['three'] = TF2coeffs['three']*(1+Phi_3)
+            #Phi_4 = kwargs.get('Phi_4', 0.0)
+            #TF2coeffs['four'] = TF2coeffs['four']*(1+Phi_4)
+            #Phi_5 = kwargs.get('Phi_5', 0.0)
+            #TF2coeffs['five'] = TF2coeffs['five']*(1+Phi_5)
+            #TF2coeffs['five_log'] = TF2coeffs['five_log']*(1+Phi_5)
+            #Phi_6 = kwargs.get('Phi_6', 0.0)
+            #TF2coeffs['six'] = TF2coeffs['six']*(1+Phi_6)
+            #TF2coeffs['six_log'] = TF2coeffs['six_log']*(1+Phi_6)
+            #Phi_7 = kwargs.get('Phi_7', 0.0)
+            #TF2coeffs['seven'] = TF2coeffs['seven']*(1+Phi_7)
+
+        pn_param_names = {0: 'Phi_0', 1: 'Phi_1', 2: 'Phi_2', 3: 'Phi_3', 4: 'Phi_4', 5: 'Phi_5', 6: 'Phi_6', 7: 'Phi_7'}
+        # Mappa dall'ordine numerico alla chiave del coefficiente in TF2coeffs
+        coeff_keys = {0: 'zero', 1: 'one', 2: 'two', 3: 'three', 4: 'four', 5: 'five', 6: 'six', 7: 'seven'}
+        replacement_orders = {1} #In this case TF2coeffs = 0, so the whole coeff is the deviation
+        
+        if isinstance(self.orderPN, int):
+            active_orders = [self.orderPN]
+        else:
+            active_orders = self.orderPN
+        
+        if self.devPN > 0:
+            for order in active_orders:
+                param_name = pn_param_names.get(order)
+                coeff_key = coeff_keys.get(order)
+                if coeff_key in TF2coeffs:
+                    #print('ADDING THE DEVIATION')
+                    phi_value = kwargs[param_name]
+                    if phi_value is None:
+                        phi_value = 0.0
+                    
+                    if order in replacement_orders:
+                        TF2coeffs[coeff_key]=phi_value
+                    else:
+                        TF2coeffs[coeff_key]=TF2coeffs[coeff_key]*(1+phi_value)
+                    #print('DONE')
 
         # Now translate into inspiral coefficients, label with the power in front of which they appear
         PhiInspcoeffs = {}
@@ -2609,10 +2795,10 @@ class IMRPhenomHM(WaveFormModel):
 
         #Adding the 'extra' term contribution
         _higher_p = None
-        if self.devPN is not None and self.devPN not in pn_labels and self.devPN != 1 and 'higher' in TF2coeffs:
-            devp = float(self.devPN)
-            _higher_p = (devp - 5.0)/3.0
-            PhiInspcoeffs['higher'] = TF2coeffs['higher']*TF2OverallAmpl*(np.pi**(_higher_p))
+        #if self.devPN is not None and self.devPN not in pn_labels and self.devPN != 1 and 'higher' in TF2coeffs:
+            #devp = float(self.devPN)
+            #_higher_p = (devp - 5.0)/3.0
+            #PhiInspcoeffs['higher'] = TF2coeffs['higher']*TF2OverallAmpl*(np.pi**(_higher_p))
 
         fInsJoinPh = self.PHI_fJoin_INS
         fMRDJoinPh = 0.5*fring

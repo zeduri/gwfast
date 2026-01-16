@@ -260,8 +260,8 @@ def main():
 
  
     
-    result=myObs.generate_events_parallel_snr_th(network)
-    #result=myObs.generate_events_parallel(network)
+    #result=myObs.generate_events_parallel_snr_th(network)
+    result=myObs.generate_events_parallel(network)
     save_data(os.path.join(out_path,'pdraw.h5'), result)
 
       

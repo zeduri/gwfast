@@ -95,12 +95,6 @@ class FisherMatrixCalculator(object):
         Parameters:
         :return array of shape (len(N_samp),)
         """
-
-        #mask = (self.snr > self.snr_th) & (self.pop_inj > 1e-12)
-        #pdet = np.zeros_like(self.snr)
-        #pdet[mask] = 0.5 * erfc((self.snr_th - self.snr[mask]) / (np.sqrt(2) * sigma))
-        
-        #return pdet[mask]
         
         return 0.5* erfc((self.snr_th-self.snr)/(np.sqrt(2)*sigma))
     
@@ -126,6 +120,7 @@ class FisherMatrixCalculator(object):
         #    
         #return (1 / self.N_samp) * np.sum(pdet_theta[mask] * self.pop_rec[mask] / self.pop_inj[mask])
 
+        
         return (1 / self.N_samp)*np.sum(pdet_theta*self.pop_rec/self.pop_inj)
 
 
@@ -146,16 +141,19 @@ class FisherMatrixCalculator(object):
         :param float pdet_lambda: selection effects.
         :return ndarray: matrix of shape (N_hyper,N_hyper,N_samp)
         """
+    
         div=self.pop_rec/self.pop_inj
+        N_samp = self.N_samp
         
         # compute the first derivative of Pdet(lambda) w.r.t. lambda
         arg_dPdet_lambda=pdet_theta * self.termI_der *div
-        dPdet_dlambda_i =(1 / self.N_samp)*np.sum(arg_dPdet_lambda,axis=-1) 
+        dPdet_dlambda_i =(1 /N_samp)*np.sum(arg_dPdet_lambda,axis=-1) 
         dPdet_dlambda_i =dPdet_dlambda_i[:,np.newaxis]
+            
         
         # compute the second derivative of Pdet(lambda) w.r.t. lambda
         arg_d2Pdet_lambda=pdet_theta*div*(self.termI_hess+np.einsum('ik, jk -> ijk', self.termI_der,self.termI_der))
-        d2Pdet_dlambda_i_dPdet_dlambda_j=(1 / self.N_samp)*np.sum(arg_d2Pdet_lambda,axis=-1)
+        d2Pdet_dlambda_i_dPdet_dlambda_j=(1 / N_samp)*np.sum(arg_d2Pdet_lambda,axis=-1)
         
         #A_det
         Adet=(pdet_lambda*d2Pdet_dlambda_i_dPdet_dlambda_j-dPdet_dlambda_i@dPdet_dlambda_i.T)/(pdet_lambda)**2
@@ -236,9 +234,10 @@ class FisherMatrixCalculator(object):
             
             Gamma_vs_Nsamp=(1/Nsamp[global_mask])*np.cumsum(arg_filtered,axis=-1)
             
-            colors=['C0','C1','C2','C3','C4','C5','C6','C7','C8','C9','C10','C11','C12','C13','C14','C15','C16','C17']
+            colors=['C0','C1','C2','C3','C4','C5','C6','C7','C8','C9','C10','C11','C12','C13','C14','C15','C16','C17',
+                   'C18','C19','C20','C21','C22','C23','C24','C25','C26','C27','C28','C29','C30','C31','C32','C33']
             titles=['Non regularized','Regularized']
-            fig, axs = plt.subplots(Nrows,Ncols, figsize=(10, 25),**kwargs)
+            fig, axs = plt.subplots(Nrows,Ncols, figsize=(20, 35),**kwargs)
             plt.subplots_adjust(left=0.1, right=0.9, bottom=0.1, top=0.9, wspace=0.3, hspace=0.3)
                         
                         
@@ -267,11 +266,12 @@ class FisherMatrixCalculator(object):
                         
             Neff=mu**2/sigma_squared   
             ylabel=list(self.POP_rec.hyperpar_dict.keys())
-            colors=['C0','C1','C2','C3','C4','C5','C6','C7','C8','C9','C10','C11','C12','C13','C14','C15','C16','C17']
+            colors=['C0','C1','C2','C3','C4','C5','C6','C7','C8','C9','C10','C11','C12','C13','C14','C15','C16','C17',
+                   'C18','C19','C20','C21','C22','C23','C24','C25','C26','C27','C28','C29','C30','C31','C32','C33']
 
             for i in range(self.N_hyperpar):
                 #if dim=='3d':
-                if i<10:
+                if i<20:
                     plt.plot(Neff[i][i],label=ylabel[i],color=colors[i])
                 else:
                     plt.plot(Neff[i][i],linestyle='--',label=ylabel[i])

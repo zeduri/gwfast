@@ -655,7 +655,7 @@ def main(idx, FLAGS):
                 wf_class = wf_model.__class__  # ottieni la classe dell’oggetto
                 sig = inspect.signature(wf_class.__init__)  # controlla i parametri del costruttore
                 if 'devPN' in sig.parameters:
-                    wf_model = wf_class(devPN=FLAGS.devPN)  # ricrea l’oggetto con devPN
+                    wf_model = wf_class(devPN=FLAGS.devPN, orderPN=FLAGS.orderPN)  # ricrea l’oggetto con devPN
                     print("Recreated waveform with deltaPN parameter!")
                 else:
                     print(f" Waveform {wf_class.__name__} does not support devPN, proceeding without it.")
@@ -816,7 +816,8 @@ parser = argparse.ArgumentParser(prog = 'calculate_forecasts_from_catalog.py', d
 parser.add_argument("--fname_obs", default='', type=str, required=True, help='Name of the file containing the catalog, without the extension ``h5``.')
 parser.add_argument("--fout", default='test_gwfast', type=str, required=True, help='Path to output folder, which has to exist before the script is launched.')
 parser.add_argument("--wf_model",  default='tf2', type=str, required=False, help='Name of the waveform model.')
-parser.add_argument("--devPN", default=None, type=int, required=False, help="PN deviation order (optional). If not None, modifies the waveform model.")
+parser.add_argument("--devPN", default=None, type=int, required=False, help="number of PN deviation order (optional). If not None, modifies the waveform model.")
+parser.add_argument("--orderPN", default=None, type=int, nargs='+', required=False, help="order of PN deviation order (optional). If not None, modifies the waveform model.")
 parser.add_argument("--batch_size", default=1, type=int, required=False, help='Size of the batch to be computed in vectorized form on each process.')
 parser.add_argument("--npools", default=1, type=int, required=False, help='Number of parallel processes.')
 parser.add_argument("--snr_th", default=12., type=float, required=False, help='Threshold value for the SNR to consider the event detectable. FIMs are computed only for events with SNR exceeding this value.')

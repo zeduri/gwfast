@@ -28,6 +28,7 @@ import h5py
 import numdifftools as ndt
 import copy
 from numdifftools.step_generators import MaxStepGenerator
+import functools
 
 from gwfast import gwfastUtils as utils
 from gwfast import gwfastGlobals as glob
@@ -179,56 +180,44 @@ class GWSignal(object):
         else:
             self._SignalDerivatives_use = self._SignalDerivatives
 
+        #'Basic' Parameters
+        inj_params_init = {'Mc': np.array([77.23905294]),
+                            'Phicoal': np.array([3.28297867]),
+                            'chi1z': np.array([0.2018924]),
+                            'chi2z': np.array([-0.68859213]),
+                            'chis': np.array([0.2018924]),
+                            'chia': np.array([-0.68859213]),
+                            'dL': np.array([22.68426174]),
+                            'eta': np.array([0.20586622]),
+                            'iota': np.array([4.48411048]),
+                            'phi': np.array([0.90252645]),
+                            'psi': np.array([3.11843169]),
+                            'Lambda1': np.array([300.]),
+                            'Lambda2': np.array([300.]),
+                            #'snr': np.array([21.20295982]),
+                            #'tGPS': np.array([1.78168705e+09]),
+                            'tcoal': np.array([0.]),
+                            'theta': np.array([3.00702251]),
+                            'chi1x': np.array([0.1]),
+                            'chi2x': np.array([0.05]),
+                            'chi1y': np.array([0.1]),
+                            'chi2y': np.array([-0.01]),
+                            'ecc': np.array([0.]), }
+
+        #Checking if we have PN dev and adding them:
+        if hasattr(self.wf_model, 'devPN') and self.wf_model.devPN > 0:
+            #Active orders:
+            if isinstance(self.wf_model.orderPN, int):
+                active_orders = [self.wf_model.orderPN]
+            else:
+                active_orders = self.wf_model.orderPN
         
-        if hasattr(self.wf_model, 'devPN') and self.wf_model.devPN is not None:
-            inj_params_init = {'Mc': np.array([77.23905294]),
-                               'Phicoal': np.array([3.28297867]),
-                               'chi1z': np.array([0.2018924]),
-                               'chi2z': np.array([-0.68859213]),
-                               'chis': np.array([0.2018924]),
-                               'chia': np.array([-0.68859213]),
-                               'dL': np.array([22.68426174]),
-                               'eta': np.array([0.20586622]),
-                               'iota': np.array([4.48411048]),
-                               'phi': np.array([0.90252645]),
-                               'psi': np.array([3.11843169]),
-                               'Lambda1':np.array([300.]),
-                               'Lambda2':np.array([300.]),
-                               #'snr': np.array([21.20295982]),
-                               #'tGPS': np.array([1.78168705e+09]),
-                               'tcoal': np.array([0.]),
-                               'theta': np.array([3.00702251]),
-                               'chi1x': np.array([0.1]),
-                               'chi2x': np.array([0.05]),
-                               'chi1y': np.array([0.1]),
-                               'chi2y': np.array([-0.01]),
-                               'ecc': np.array([0.]),
-                               'deltaPN': np.array([0.]),
-                                }
-        else: 
-            inj_params_init = {'Mc': np.array([77.23905294]),
-                               'Phicoal': np.array([3.28297867]),
-                               'chi1z': np.array([0.2018924]),
-                               'chi2z': np.array([-0.68859213]),
-                               'chis': np.array([0.2018924]),
-                               'chia': np.array([-0.68859213]),
-                               'dL': np.array([22.68426174]),
-                               'eta': np.array([0.20586622]),
-                               'iota': np.array([4.48411048]),
-                               'phi': np.array([0.90252645]),
-                               'psi': np.array([3.11843169]),
-                               'Lambda1':np.array([300.]),
-                               'Lambda2':np.array([300.]),
-                               #'snr': np.array([21.20295982]),
-                               #'tGPS': np.array([1.78168705e+09]),
-                               'tcoal': np.array([0.]),
-                               'theta': np.array([3.00702251]),
-                               'chi1x': np.array([0.1]),
-                               'chi2x': np.array([0.05]),
-                               'chi1y': np.array([0.1]),
-                               'chi2y': np.array([-0.01]),
-                               'ecc': np.array([0.]),
-                            }
+            phi_params_to_add = {}
+            for order in active_orders:
+                param_name = f'Phi_{order}'
+                phi_params_to_add[param_name] = np.array([0.])
+            
+            inj_params_init.update(phi_params_to_add)
             
         verboseOr = self.verbose
         self.verbose = False
@@ -512,8 +501,9 @@ class GWSignal(object):
         return 2.*np.pi*f*(tcoal*3600.*24.) - Phicoal - PhiGw
 
 
-    def GWstrain(self, f, Mc, eta, dL, theta, phi, iota, psi, tcoal, Phicoal, chiS, chiA, chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, ecc, deltaPN=None, rot=0., is_m1m2=False, is_chi1chi2=False, is_prec_ang=False, is_Lam1Lam2=False, return_single_comp=None):
-###OFF    def GWstrain(self, f, Mc, eta, dL, theta, phi, iota, psi, tcoal, Phicoal, chiS, chiA, chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, ecc, rot=0., is_m1m2=False, is_chi1chi2=False, is_prec_ang=False, is_Lam1Lam2=False, return_single_comp=None):
+    def GWstrain(self, f, Mc, eta, dL, theta, phi, iota, psi, tcoal, Phicoal, chiS, chiA, chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, ecc, Phi_0=None, Phi_1=None, Phi_2=None, Phi_3=None, Phi_4=None, Phi_5=None, Phi_6=None, Phi_7=None, rot=0., is_m1m2=False, is_chi1chi2=False, is_prec_ang=False, is_Lam1Lam2=False, return_single_comp=None, **kwargs):
+
+#OLD    def GWstrain(self, f, Mc, eta, dL, theta, phi, iota, psi, tcoal, Phicoal, chiS, chiA, chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, ecc, deltaPN=None, rot=0., is_m1m2=False, is_chi1chi2=False, is_prec_ang=False, is_Lam1Lam2=False, return_single_comp=None):
         """
         Compute the full GW strain (complex) as a function of the parameters, at given frequencies.
         
@@ -578,8 +568,22 @@ class GWSignal(object):
             # convert angles and iota
                 iota, chi1xUse, chi1yUse, chi1z, chi2xUse, chi2yUse, chi2z = utils.TransformPrecessing_angles2comp(thetaJN=iota, phiJL=chi1y, theta1=chi1x, theta2=chi2x, phi12=chi2y, chi1=chiS, chi2=chiA, Mc=McUse, eta=etaUse, fRef=self.fmin, phiRef=0.)
             
-###OFF        evParams = {'Mc':McUse, 'dL':dL, 'theta':theta, 'phi':phi, 'iota':iota, 'psi':psi, 'tcoal':tcoal, 'eta':etaUse, 'Phicoal':Phicoal, 'chi1z':chi1z, 'chi2z':chi2z, 'chi1x':chi1xUse, 'chi2x':chi2xUse, 'chi1y':chi1yUse, 'chi2y':chi2yUse}
-        evParams = {'Mc':McUse, 'dL':dL, 'theta':theta, 'phi':phi, 'iota':iota, 'psi':psi, 'tcoal':tcoal, 'eta':etaUse, 'Phicoal':Phicoal, 'chi1z':chi1z, 'chi2z':chi2z, 'chi1x':chi1xUse, 'chi2x':chi2xUse, 'chi1y':chi1yUse, 'chi2y':chi2yUse, 'deltaPN': deltaPN}
+#OLD        evParams = {'Mc':McUse, 'dL':dL, 'theta':theta, 'phi':phi, 'iota':iota, 'psi':psi, 'tcoal':tcoal, 'eta':etaUse, 'Phicoal':Phicoal, 'chi1z':chi1z, 'chi2z':chi2z, 'chi1x':chi1xUse, 'chi2x':chi2xUse, 'chi1y':chi1yUse, 'chi2y':chi2yUse, 'deltaPN': deltaPN}
+        evParams = {'Mc':McUse, 'dL':dL, 'theta':theta, 'phi':phi, 'iota':iota, 'psi':psi, 'tcoal':tcoal, 'eta':etaUse, 'Phicoal':Phicoal, 'chi1z':chi1z, 'chi2z':chi2z, 'chi1x':chi1xUse, 'chi2x':chi2xUse, 'chi1y':chi1yUse, 'chi2y':chi2yUse}
+
+        phi_map = {0: Phi_0, 1: Phi_1, 2: Phi_2, 3: Phi_3, 4: Phi_4, 5: Phi_5, 6: Phi_6, 7: Phi_7}
+
+        if hasattr(self.wf_model, 'devPN') and self.wf_model.devPN > 0:
+            if isinstance(self.wf_model.orderPN, int):
+                active_orders = [self.wf_model.orderPN]
+            else:
+                active_orders = self.wf_model.orderPN
+                
+            for order in active_orders:
+                param_name = f'Phi_{order}'
+                value = phi_map.get(order)
+                evParams[param_name] = value
+                #print(param_name, value)
         
         if self.wf_model.is_tidal:
             if not is_Lam1Lam2:
@@ -592,8 +596,6 @@ class GWSignal(object):
         
         if self.wf_model.is_eccentric:
             evParams['ecc'] = ecc
-            
-        evParams['deltaPN'] = deltaPN ###OFF remove this
             
         if self.useEarthMotion:
             # Compute Doppler contribution
@@ -848,11 +850,52 @@ class GWSignal(object):
         
         McOr, dL, theta, phi = evParams['Mc'].astype('complex128'), evParams['dL'].astype('complex128'), evParams['theta'].astype('complex128'), evParams['phi'].astype('complex128')
         iota, psi, tcoal, etaOr, Phicoal = evParams['iota'].astype('complex128'), evParams['psi'].astype('complex128'), evParams['tcoal'].astype('complex128'), evParams['eta'].astype('complex128'), evParams['Phicoal'].astype('complex128')
+
+        #Inizializing all possible Phi_i variables 
+        Phi_0, Phi_1, Phi_2, Phi_3, Phi_4, Phi_5, Phi_6, Phi_7 = (0,)*8
+        phi_vars = {'Phi_0': Phi_0, 'Phi_1': Phi_1, 'Phi_2': Phi_2, 'Phi_3': Phi_3, 'Phi_4': Phi_4, 'Phi_5': Phi_5, 'Phi_6': Phi_6, 'Phi_7': Phi_7}
         
-        if hasattr(self.wf_model, 'devPN') and self.wf_model.devPN is not None:
-            deltaPN = evParams['deltaPN'].astype('complex128') ###OFF remove this 
-        else:
-            pass 
+        if hasattr(self.wf_model, 'devPN') and self.wf_model.devPN > 0:
+            if isinstance(self.wf_model.orderPN, int):
+                active_orders = [self.wf_model.orderPN]
+            else:
+                active_orders = self.wf_model.orderPN
+            for order in active_orders:
+                param_name = f'Phi_{order}'
+                if param_name in phi_vars:
+                    value = evParams.get(param_name, 0)
+                    phi_vars[param_name] = value
+                    #print('Name:', param_name, 'Value:', value)
+        
+        Phi_0 = np.atleast_1d(phi_vars['Phi_0']).astype(np.complex128)
+        Phi_1 = np.atleast_1d(phi_vars['Phi_1']).astype(np.complex128)
+        Phi_2 = np.atleast_1d(phi_vars['Phi_2']).astype(np.complex128)
+        Phi_3 = np.atleast_1d(phi_vars['Phi_3']).astype(np.complex128)
+        Phi_4 = np.atleast_1d(phi_vars['Phi_4']).astype(np.complex128)
+        Phi_5 = np.atleast_1d(phi_vars['Phi_5']).astype(np.complex128)
+        Phi_6 = np.atleast_1d(phi_vars['Phi_6']).astype(np.complex128)
+        Phi_7 = np.atleast_1d(phi_vars['Phi_7']).astype(np.complex128)
+
+        phi_map = {0: Phi_0, 1: Phi_1, 2: Phi_2, 3: Phi_3, 4: Phi_4, 5: Phi_5, 6: Phi_6, 7: Phi_7}
+        devPN_val = self.wf_model.devPN if hasattr(self.wf_model, 'devPN') and self.wf_model.devPN is not None else 0
+                
+        #if hasattr(self.wf_model, 'devPN') and self.wf_model.devPN==1:
+            #val_Phi_0 = evParams.get('Phi_0', 0)
+            #val_Phi_1 = evParams.get('Phi_1', 0)
+            #val_Phi_2 = evParams.get('Phi_2', 0)
+            #val_Phi_3 = evParams.get('Phi_3', 0)
+            #val_Phi_4 = evParams.get('Phi_4', 0)
+            #val_Phi_5 = evParams.get('Phi_5', 0)
+            #val_Phi_6 = evParams.get('Phi_6', 0)
+            #val_Phi_7 = evParams.get('Phi_7', 0)
+            #Phi_0 = np.atleast_1d(val_Phi_0).astype(np.complex128)
+            #Phi_1 = np.atleast_1d(val_Phi_1).astype(np.complex128)
+            #Phi_2 = np.atleast_1d(val_Phi_2).astype(np.complex128)
+            #Phi_3 = np.atleast_1d(val_Phi_3).astype(np.complex128)
+            #Phi_4 = np.atleast_1d(val_Phi_4).astype(np.complex128)
+            #Phi_5 = np.atleast_1d(val_Phi_5).astype(np.complex128)
+            #Phi_6 = np.atleast_1d(val_Phi_6).astype(np.complex128)
+            #Phi_7 = np.atleast_1d(val_Phi_7).astype(np.complex128)
             
         if use_m1m2:
             # In this case Mc represents m1 and eta represents m2
@@ -952,11 +995,38 @@ class GWSignal(object):
         allSNRDerivs=[]
         
         if self.detector_shape=='L':
-            # Compute derivatives            
-            if hasattr(self.wf_model, 'devPN') and self.wf_model.devPN is not None:
-                FisherDerivs = self._SignalDerivatives_use(fgrids, Mc, eta, dL, theta, phi, iota, psi, tcoal, Phicoal, chiS, chiA, chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, ecc, deltaPN, rot=0., use_m1m2=use_m1m2, use_chi1chi2=use_chi1chi2, use_prec_ang=use_prec_ang, computeAnalyticalDeriv=computeAnalyticalDeriv, computeDerivFinDiff=computeDerivFinDiff, **kwargs)
+            # Compute derivatives
+
+            if devPN_val == 1:
+                #CASO 1: devPN=1
+                Phis = [phi_map[i] for i in self.wf_model.orderPN]
+                FisherDerivs = self._SignalDerivatives_use(fgrids=fgrids, Mc=Mc, eta=eta, dL=dL, theta=theta, phi=phi, iota=iota, psi=psi, tcoal=tcoal, Phicoal=Phicoal, chiS=chiS, chiA=chiA, chi1x=chi1x, chi2x=chi2x, chi1y=chi1y, chi2y=chi2y, LambdaTilde=LambdaTilde,deltaLambda=deltaLambda, ecc=ecc, **{f'Phi_{self.wf_model.orderPN[0]}': Phis[0]}, rot=0., use_m1m2=use_m1m2, use_chi1chi2=use_chi1chi2,use_prec_ang=use_prec_ang, computeAnalyticalDeriv=computeAnalyticalDeriv, computeDerivFinDiff=computeDerivFinDiff, **kwargs)
+            
+            elif devPN_val == 2:
+                #CASO 2:devPN=2
+                Phis = [phi_map[i] for i in self.wf_model.orderPN]
+                FisherDerivs = self._SignalDerivatives_use(fgrids=fgrids, Mc=Mc, eta=eta, dL=dL, theta=theta, phi=phi, iota=iota, psi=psi, tcoal=tcoal, Phicoal=Phicoal,chiS=chiS, chiA=chiA, chi1x=chi1x, chi2x=chi2x, chi1y=chi1y, chi2y=chi2y, LambdaTilde=LambdaTilde,deltaLambda=deltaLambda, ecc=ecc, **{f'Phi_{self.wf_model.orderPN[0]}': Phis[0]}, **{f'Phi_{self.wf_model.orderPN[1]}': Phis[1]}, rot=0., use_m1m2=use_m1m2, use_chi1chi2=use_chi1chi2, use_prec_ang=use_prec_ang, computeAnalyticalDeriv=computeAnalyticalDeriv, computeDerivFinDiff=computeDerivFinDiff, **kwargs)
+            
+            elif devPN_val == 5:
+                #CASO 3: devPN=5
+                Phis = [phi_map[i] for i in self.wf_model.orderPN]
+                FisherDerivs = self._SignalDerivatives_use(fgrids=fgrids, Mc=Mc, eta=eta, dL=dL, theta=theta, phi=phi, iota=iota, psi=psi, tcoal=tcoal, Phicoal=Phicoal,chiS=chiS, chiA=chiA, chi1x=chi1x, chi2x=chi2x, chi1y=chi1y, chi2y=chi2y, LambdaTilde=LambdaTilde,deltaLambda=deltaLambda, ecc=ecc, **{f'Phi_{self.wf_model.orderPN[0]}': Phis[0]}, **{f'Phi_{self.wf_model.orderPN[1]}': Phis[1]}, **{f'Phi_{self.wf_model.orderPN[2]}': Phis[2]}, **{f'Phi_{self.wf_model.orderPN[3]}': Phis[3]}, **{f'Phi_{self.wf_model.orderPN[4]}': Phis[4]}, rot=0.,use_m1m2=use_m1m2,use_chi1chi2=use_chi1chi2,use_prec_ang=use_prec_ang,computeAnalyticalDeriv=computeAnalyticalDeriv,computeDerivFinDiff=computeDerivFinDiff,**kwargs)
+                
+            elif devPN_val == 7:
+                #CASO 4: devPN=7
+                Phis = [phi_map[i] for i in self.wf_model.orderPN]
+                FisherDerivs = self._SignalDerivatives_use(fgrids=fgrids, Mc=Mc, eta=eta, dL=dL, theta=theta, phi=phi, iota=iota, psi=psi, tcoal=tcoal, Phicoal=Phicoal,chiS=chiS, chiA=chiA, chi1x=chi1x, chi2x=chi2x, chi1y=chi1y, chi2y=chi2y, LambdaTilde=LambdaTilde,deltaLambda=deltaLambda, ecc=ecc, **{f'Phi_{self.wf_model.orderPN[0]}': Phis[0]}, **{f'Phi_{self.wf_model.orderPN[1]}': Phis[1]}, **{f'Phi_{self.wf_model.orderPN[2]}': Phis[2]}, **{f'Phi_{self.wf_model.orderPN[3]}': Phis[3]}, **{f'Phi_{self.wf_model.orderPN[4]}': Phis[4]}, **{f'Phi_{self.wf_model.orderPN[5]}': Phis[5]},**{f'Phi_{self.wf_model.orderPN[6]}': Phis[6]},rot=0.,use_m1m2=use_m1m2,use_chi1chi2=use_chi1chi2,use_prec_ang=use_prec_ang,computeAnalyticalDeriv=computeAnalyticalDeriv,computeDerivFinDiff=computeDerivFinDiff,**kwargs)
+            
             else:
-                FisherDerivs = self._SignalDerivatives_use(fgrids, Mc, eta, dL, theta, phi, iota, psi, tcoal, Phicoal, chiS, chiA, chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, ecc, rot=0., use_m1m2=use_m1m2, use_chi1chi2=use_chi1chi2, use_prec_ang=use_prec_ang, computeAnalyticalDeriv=computeAnalyticalDeriv, computeDerivFinDiff=computeDerivFinDiff, **kwargs)
+                #CASO DEFAULT: devPN=0
+                FisherDerivs = self._SignalDerivatives_use(fgrids=fgrids, Mc=Mc, eta=eta, dL=dL, theta=theta, phi=phi, iota=iota, psi=psi, tcoal=tcoal, Phicoal=Phicoal, chiS=chiS, chiA=chiA, chi1x=chi1x, chi2x=chi2x, chi1y=chi1y, chi2y=chi2y, LambdaTilde=LambdaTilde, deltaLambda=deltaLambda, ecc=ecc, rot=0., use_m1m2=use_m1m2, use_chi1chi2=use_chi1chi2, use_prec_ang=use_prec_ang, computeAnalyticalDeriv=computeAnalyticalDeriv, computeDerivFinDiff=computeDerivFinDiff, **kwargs)
+                
+                        
+            #if hasattr(self.wf_model, 'devPN') and self.wf_model.devPN==1:
+                #FisherDerivs = self._SignalDerivatives_use(fgrids, Mc, eta, dL, theta, phi, iota, psi, tcoal, Phicoal, chiS, chiA, chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, ecc, Phi_0, Phi_1, Phi_2, Phi_3, Phi_4, rot=0., use_m1m2=use_m1m2, use_chi1chi2=use_chi1chi2, use_prec_ang=use_prec_ang, computeAnalyticalDeriv=computeAnalyticalDeriv, computeDerivFinDiff=computeDerivFinDiff, **kwargs)
+                #Phi_2, Phi_3, Phi_4, Phi_5, Phi_6, Phi_7,
+            #else:
+                #FisherDerivs = self._SignalDerivatives_use(fgrids, Mc, eta, dL, theta, phi, iota, psi, tcoal, Phicoal, chiS, chiA, chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, ecc, rot=0., use_m1m2=use_m1m2, use_chi1chi2=use_chi1chi2, use_prec_ang=use_prec_ang, computeAnalyticalDeriv=computeAnalyticalDeriv, computeDerivFinDiff=computeDerivFinDiff, **kwargs)
             
             # Change the units of the tcoal derivative from days to seconds (this improves conditioning)
             FisherDerivs = onp.array(FisherDerivs)
@@ -981,10 +1051,32 @@ class GWSignal(object):
             if return_derivatives:
                 allDerivs.append(FisherDerivs)
             if return_SNR_derivatives:
-                if hasattr(self.wf_model, 'devPN') and self.wf_model.devPN is not None:
-                    strain_full = self.GWstrain(fgrids, Mc, eta, dL, theta, phi, iota, psi, tcoal, Phicoal, chiS, chiA, chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, ecc, deltaPN, rot=0., is_m1m2=use_m1m2, is_chi1chi2=use_chi1chi2, is_prec_ang=use_prec_ang, **kwargs)
-                else: 
-                    strain_full = self.GWstrain(fgrids, Mc, eta, dL, theta, phi, iota, psi, tcoal, Phicoal, chiS, chiA, chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, ecc, rot=0., is_m1m2=use_m1m2, is_chi1chi2=use_chi1chi2, is_prec_ang=use_prec_ang, **kwargs)
+#OLD                if hasattr(self.wf_model, 'devPN') and self.wf_model.devPN is not None:
+#OLD                    strain_full = self.GWstrain(fgrids, Mc, eta, dL, theta, phi, iota, psi, tcoal, Phicoal, chiS, chiA, chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, ecc, deltaPN, rot=0., is_m1m2=use_m1m2, is_chi1chi2=use_chi1chi2, is_prec_ang=use_prec_ang, **kwargs)
+                if devPN_val == 1:
+                    # CASO 1: devPN=1
+                    Phis = [phi_map[i] for i in self.wf_model.orderPN]
+                    strain_full = self.GWstrain(fgrids=fgrids, Mc=Mc, eta=eta, dL=dL, theta=theta, phi=phi, iota=iota, psi=psi, tcoal=tcoal, Phicoal=Phicoal, chiS=chiS, chiA=chiA, chi1x=chi1x, chi2x=chi2x, chi1y=chi1y, chi2y=chi2y, LambdaTilde=LambdaTilde, deltaLambda=deltaLambda, ecc=ecc, **{f'Phi_{self.wf_model.orderPN[0]}': Phis[0]}, rot=0., is_m1m2=use_m1m2, is_chi1chi2=use_chi1chi2, is_prec_ang=use_prec_ang, **kwargs)
+                
+                elif devPN_val == 2:
+                    # CASO 2: devPN=2
+                    Phis = [phi_map[i] for i in self.wf_model.orderPN]
+                    strain_full = self.GWstrain(fgrids=fgrids, Mc=Mc, eta=eta, dL=dL, theta=theta, phi=phi, iota=iota, psi=psi, tcoal=tcoal, Phicoal=Phicoal, chiS=chiS, chiA=chiA, chi1x=chi1x, chi2x=chi2x, chi1y=chi1y, chi2y=chi2y, LambdaTilde=LambdaTilde, deltaLambda=deltaLambda, ecc=ecc, **{f'Phi_{self.wf_model.orderPN[0]}': Phis[0]}, **{f'Phi_{self.wf_model.orderPN[1]}': Phis[1]}, rot=0., is_m1m2=use_m1m2, is_chi1chi2=use_chi1chi2, is_prec_ang=use_prec_ang, **kwargs)
+                
+                elif devPN_val == 5:
+                    # CASO 3: devPN=5
+                    Phis = [phi_map[i] for i in self.wf_model.orderPN]
+                    strain_full = self.GWstrain(fgrids=fgrids, Mc=Mc, eta=eta, dL=dL, theta=theta, phi=phi, iota=iota, psi=psi, tcoal=tcoal, Phicoal=Phicoal, chiS=chiS, chiA=chiA, chi1x=chi1x, chi2x=chi2x, chi1y=chi1y, chi2y=chi2y, LambdaTilde=LambdaTilde, deltaLambda=deltaLambda, ecc=ecc, **{f'Phi_{self.wf_model.orderPN[0]}': Phis[0]}, **{f'Phi_{self.wf_model.orderPN[1]}': Phis[1]}, **{f'Phi_{self.wf_model.orderPN[2]}': Phis[2]}, **{f'Phi_{self.wf_model.orderPN[3]}': Phis[3]}, **{f'Phi_{self.wf_model.orderPN[4]}': Phis[4]}, rot=0., is_m1m2=use_m1m2, is_chi1chi2=use_chi1chi2, is_prec_ang=use_prec_ang, **kwargs)
+
+                elif devPN_val == 7:
+                    # CASO 4: devPN=7
+                    Phis = [phi_map[i] for i in self.wf_model.orderPN]
+                    strain_full = self.GWstrain(fgrids=fgrids, Mc=Mc, eta=eta, dL=dL, theta=theta, phi=phi, iota=iota, psi=psi, tcoal=tcoal, Phicoal=Phicoal, chiS=chiS, chiA=chiA, chi1x=chi1x, chi2x=chi2x, chi1y=chi1y, chi2y=chi2y, LambdaTilde=LambdaTilde, deltaLambda=deltaLambda, ecc=ecc, **{f'Phi_{self.wf_model.orderPN[0]}': Phis[0]}, **{f'Phi_{self.wf_model.orderPN[1]}': Phis[1]}, **{f'Phi_{self.wf_model.orderPN[2]}': Phis[2]}, **{f'Phi_{self.wf_model.orderPN[3]}': Phis[3]}, **{f'Phi_{self.wf_model.orderPN[4]}': Phis[4]}, **{f'Phi_{self.wf_model.orderPN[5]}': Phis[5]}, **{f'Phi_{self.wf_model.orderPN[6]}': Phis[6]}, rot=0., is_m1m2=use_m1m2, is_chi1chi2=use_chi1chi2, is_prec_ang=use_prec_ang, **kwargs)
+
+                else:
+                    # CASO DEFAULT: devPN=0
+                    strain_full = self.GWstrain(fgrids=fgrids, Mc=Mc, eta=eta, dL=dL, theta=theta, phi=phi, iota=iota, psi=psi, tcoal=tcoal, Phicoal=Phicoal, chiS=chiS, chiA=chiA, chi1x=chi1x, chi2x=chi2x, chi1y=chi1y, chi2y=chi2y, LambdaTilde=LambdaTilde, deltaLambda=deltaLambda, ecc=ecc, rot=0., is_m1m2=use_m1m2, is_chi1chi2=use_chi1chi2, is_prec_ang=use_prec_ang, **kwargs)
+
                 SNRDerivs = onp.zeros((nParams,len(Mc)))
                 for alpha in range(nParams):
                     SNRDerivs[alpha,:] = 4.*onp.trapz((strain_full*onp.conjugate(FisherDerivs[alpha,:,:]).T).real/strainGrids.real, fgrids.real, axis=0)
@@ -993,11 +1085,26 @@ class GWSignal(object):
             #Fisher = onp.zeros((nParams,nParams,len(Mc)))
             if not self.compute2arms:
                 for i in range(3):
-                    if hasattr(self.wf_model, 'devPN') and self.wf_model.devPN is not None:
-                    # Change rot and compute derivatives
-                        FisherDerivs = self._SignalDerivatives_use(fgrids, Mc, eta, dL, theta, phi, iota, psi, tcoal, Phicoal, chiS, chiA, chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, ecc, deltaPN, rot=i*60., use_m1m2=use_m1m2, use_chi1chi2=use_chi1chi2, use_prec_ang=use_prec_ang, computeAnalyticalDeriv=computeAnalyticalDeriv, computeDerivFinDiff=computeDerivFinDiff, **kwargs)
+                    if devPN_val == 1:
+                        Phis = [phi_map[i] for i in self.wf_model.orderPN]
+                        FisherDerivs = self._SignalDerivatives_use(fgrids=fgrids, Mc=Mc, eta=eta, dL=dL, theta=theta, phi=phi, iota=iota, psi=psi, tcoal=tcoal, Phicoal=Phicoal, chiS=chiS, chiA=chiA, chi1x=chi1x, chi2x=chi2x, chi1y=chi1y, chi2y=chi2y, LambdaTilde=LambdaTilde, deltaLambda=deltaLambda, ecc=ecc, **{f'Phi_{self.wf_model.orderPN[0]}': Phis[0]}, rot=i*60., use_m1m2=use_m1m2, use_chi1chi2=use_chi1chi2, use_prec_ang=use_prec_ang, computeAnalyticalDeriv=computeAnalyticalDeriv, computeDerivFinDiff=computeDerivFinDiff, **kwargs)
+                    
+                    elif devPN_val == 2:
+                        Phis = [phi_map[i] for i in self.wf_model.orderPN]
+                        FisherDerivs = self._SignalDerivatives_use(fgrids=fgrids, Mc=Mc, eta=eta, dL=dL, theta=theta, phi=phi, iota=iota, psi=psi, tcoal=tcoal, Phicoal=Phicoal, chiS=chiS, chiA=chiA, chi1x=chi1x, chi2x=chi2x, chi1y=chi1y, chi2y=chi2y, LambdaTilde=LambdaTilde, deltaLambda=deltaLambda, ecc=ecc, **{f'Phi_{self.wf_model.orderPN[0]}': Phis[0]}, **{f'Phi_{self.wf_model.orderPN[1]}': Phis[1]}, rot=i*60., use_m1m2=use_m1m2, use_chi1chi2=use_chi1chi2, use_prec_ang=use_prec_ang, computeAnalyticalDeriv=computeAnalyticalDeriv, computeDerivFinDiff=computeDerivFinDiff, **kwargs)
+                    
+                    elif devPN_val == 5:
+                        Phis = [phi_map[i] for i in self.wf_model.orderPN]
+                        FisherDerivs = self._SignalDerivatives_use(fgrids=fgrids, Mc=Mc, eta=eta, dL=dL, theta=theta, phi=phi, iota=iota, psi=psi, tcoal=tcoal, Phicoal=Phicoal,chiS=chiS, chiA=chiA, chi1x=chi1x, chi2x=chi2x, chi1y=chi1y, chi2y=chi2y, LambdaTilde=LambdaTilde, deltaLambda=deltaLambda, ecc=ecc, **{f'Phi_{self.wf_model.orderPN[0]}': Phis[0]}, **{f'Phi_{self.wf_model.orderPN[1]}': Phis[1]}, **{f'Phi_{self.wf_model.orderPN[2]}': Phis[2]}, **{f'Phi_{self.wf_model.orderPN[3]}': Phis[3]}, **{f'Phi_{self.wf_model.orderPN[4]}': Phis[4]}, rot=i*60., use_m1m2=use_m1m2, use_chi1chi2=use_chi1chi2, use_prec_ang=use_prec_ang, computeAnalyticalDeriv=computeAnalyticalDeriv, computeDerivFinDiff=computeDerivFinDiff, **kwargs)
+                    elif devPN_val == 7:
+                        Phis = [phi_map[i] for i in self.wf_model.orderPN]
+                        FisherDerivs = self._SignalDerivatives_use(fgrids=fgrids, Mc=Mc, eta=eta, dL=dL, theta=theta, phi=phi, iota=iota, psi=psi, tcoal=tcoal, Phicoal=Phicoal,chiS=chiS, chiA=chiA, chi1x=chi1x, chi2x=chi2x, chi1y=chi1y, chi2y=chi2y, LambdaTilde=LambdaTilde, deltaLambda=deltaLambda, ecc=ecc, **{f'Phi_{self.wf_model.orderPN[0]}': Phis[0]}, **{f'Phi_{self.wf_model.orderPN[1]}': Phis[1]}, **{f'Phi_{self.wf_model.orderPN[2]}': Phis[2]}, **{f'Phi_{self.wf_model.orderPN[3]}': Phis[3]}, **{f'Phi_{self.wf_model.orderPN[4]}': Phis[4]}, **{f'Phi_{self.wf_model.orderPN[5]}': Phis[5]}, **{f'Phi_{self.wf_model.orderPN[6]}': Phis[6]}, rot=i*60., use_m1m2=use_m1m2, use_chi1chi2=use_chi1chi2, use_prec_ang=use_prec_ang, computeAnalyticalDeriv=computeAnalyticalDeriv, computeDerivFinDiff=computeDerivFinDiff, **kwargs)
+                    
                     else:
-                        FisherDerivs = self._SignalDerivatives_use(fgrids, Mc, eta, dL, theta, phi, iota, psi, tcoal, Phicoal, chiS, chiA, chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, ecc, rot=i*60., use_m1m2=use_m1m2, use_chi1chi2=use_chi1chi2, use_prec_ang=use_prec_ang, computeAnalyticalDeriv=computeAnalyticalDeriv, computeDerivFinDiff=computeDerivFinDiff, **kwargs)
+                        FisherDerivs = self._SignalDerivatives_use(fgrids=fgrids, Mc=Mc, eta=eta, dL=dL, theta=theta, phi=phi, iota=iota, psi=psi, tcoal=tcoal, Phicoal=Phicoal, chiS=chiS, chiA=chiA, chi1x=chi1x, chi2x=chi2x, chi1y=chi1y, chi2y=chi2y, LambdaTilde=LambdaTilde, deltaLambda=deltaLambda, ecc=ecc, rot=i*60., use_m1m2=use_m1m2, use_chi1chi2=use_chi1chi2, use_prec_ang=use_prec_ang, computeAnalyticalDeriv=computeAnalyticalDeriv, computeDerivFinDiff=computeDerivFinDiff, **kwargs)
+
+#OLD                    if hasattr(self.wf_model, 'devPN') and self.wf_model.devPN is not None:
+#OLD                        FisherDerivs = self._SignalDerivatives_use(fgrids, Mc, eta, dL, theta, phi, iota, psi, tcoal, Phicoal, chiS, chiA, chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, ecc, deltaPN, rot=i*60., use_m1m2=use_m1m2, use_chi1chi2=use_chi1chi2, use_prec_ang=use_prec_ang, computeAnalyticalDeriv=computeAnalyticalDeriv, computeDerivFinDiff=computeDerivFinDiff, **kwargs)
                         
                     # Change the units of the tcoal derivative from days to seconds (this improves conditioning)
                     FisherDerivs = onp.array(FisherDerivs)
@@ -1024,10 +1131,27 @@ class GWSignal(object):
                     if return_derivatives:
                         allDerivs.append(FisherDerivs)
                     if return_SNR_derivatives:
-                        if hasattr(self.wf_model, 'devPN') and self.wf_model.devPN is not None:
-                            strain_full = self.GWstrain(fgrids, Mc, eta, dL, theta, phi, iota, psi, tcoal, Phicoal, chiS, chiA, chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, ecc, deltaPN, rot=i*60., is_m1m2=use_m1m2, is_chi1chi2=use_chi1chi2, is_prec_ang=use_prec_ang, **kwargs)
+                        if devPN_val == 1:
+                            Phis = [phi_map[i] for i in self.wf_model.orderPN]
+                            strain_full = self.GWstrain(fgrids=fgrids, Mc=Mc, eta=eta, dL=dL, theta=theta, phi=phi, iota=iota, psi=psi, tcoal=tcoal, Phicoal=Phicoal, chiS=chiS, chiA=chiA, chi1x=chi1x, chi2x=chi2x, chi1y=chi1y, chi2y=chi2y, LambdaTilde=LambdaTilde, deltaLambda=deltaLambda, ecc=ecc, **{f'Phi_{self.wf_model.orderPN[0]}': Phis[0]}, rot=i*60., is_m1m2=use_m1m2, is_chi1chi2=use_chi1chi2, is_prec_ang=use_prec_ang, **kwargs)
+                        
+                        elif devPN_val == 2:
+                            Phis = [phi_map[i] for i in self.wf_model.orderPN]
+                            strain_full = self.GWstrain(fgrids=fgrids, Mc=Mc, eta=eta, dL=dL, theta=theta, phi=phi, iota=iota, psi=psi, tcoal=tcoal, Phicoal=Phicoal, chiS=chiS, chiA=chiA, chi1x=chi1x, chi2x=chi2x, chi1y=chi1y, chi2y=chi2y, LambdaTilde=LambdaTilde, deltaLambda=deltaLambda, ecc=ecc, **{f'Phi_{self.wf_model.orderPN[0]}': Phis[0]}, **{f'Phi_{self.wf_model.orderPN[1]}': Phis[1]}, rot=i*60., is_m1m2=use_m1m2, is_chi1chi2=use_chi1chi2, is_prec_ang=use_prec_ang, **kwargs)
+                        
+                        elif devPN_val == 5:
+                            Phis = [phi_map[i] for i in self.wf_model.orderPN]
+                            strain_full = self.GWstrain(fgrids=fgrids, Mc=Mc, eta=eta, dL=dL, theta=theta, phi=phi, iota=iota, psi=psi, tcoal=tcoal, Phicoal=Phicoal,chiS=chiS, chiA=chiA, chi1x=chi1x, chi2x=chi2x, chi1y=chi1y, chi2y=chi2y, LambdaTilde=LambdaTilde, deltaLambda=deltaLambda, ecc=ecc, **{f'Phi_{self.wf_model.orderPN[0]}': Phis[0]}, **{f'Phi_{self.wf_model.orderPN[1]}': Phis[1]}, **{f'Phi_{self.wf_model.orderPN[2]}': Phis[2]}, **{f'Phi_{self.wf_model.orderPN[3]}': Phis[3]}, **{f'Phi_{self.wf_model.orderPN[4]}': Phis[4]}, rot=i*60., is_m1m2=use_m1m2, is_chi1chi2=use_chi1chi2, is_prec_ang=use_prec_ang, **kwargs)
+
+                        elif devPN_val == 7:
+                            Phis = [phi_map[i] for i in self.wf_model.orderPN]
+                            strain_full = self.GWstrain(fgrids=fgrids, Mc=Mc, eta=eta, dL=dL, theta=theta, phi=phi, iota=iota, psi=psi, tcoal=tcoal, Phicoal=Phicoal,chiS=chiS, chiA=chiA, chi1x=chi1x, chi2x=chi2x, chi1y=chi1y, chi2y=chi2y, LambdaTilde=LambdaTilde, deltaLambda=deltaLambda, ecc=ecc, **{f'Phi_{self.wf_model.orderPN[0]}': Phis[0]}, **{f'Phi_{self.wf_model.orderPN[1]}': Phis[1]}, **{f'Phi_{self.wf_model.orderPN[2]}': Phis[2]}, **{f'Phi_{self.wf_model.orderPN[3]}': Phis[3]}, **{f'Phi_{self.wf_model.orderPN[4]}': Phis[4]}, **{f'Phi_{self.wf_model.orderPN[5]}': Phis[5]}, **{f'Phi_{self.wf_model.orderPN[6]}': Phis[6]}, rot=i*60., is_m1m2=use_m1m2, is_chi1chi2=use_chi1chi2, is_prec_ang=use_prec_ang, **kwargs)
+                        
                         else:
-                            strain_full = self.GWstrain(fgrids, Mc, eta, dL, theta, phi, iota, psi, tcoal, Phicoal, chiS, chiA, chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, ecc, rot=i*60., is_m1m2=use_m1m2, is_chi1chi2=use_chi1chi2, is_prec_ang=use_prec_ang, **kwargs)                      
+                            strain_full = self.GWstrain(fgrids=fgrids, Mc=Mc, eta=eta, dL=dL, theta=theta, phi=phi, iota=iota, psi=psi, tcoal=tcoal, Phicoal=Phicoal, chiS=chiS, chiA=chiA, chi1x=chi1x, chi2x=chi2x, chi1y=chi1y, chi2y=chi2y, LambdaTilde=LambdaTilde, deltaLambda=deltaLambda, ecc=ecc, rot=i*60., is_m1m2=use_m1m2, is_chi1chi2=use_chi1chi2, is_prec_ang=use_prec_ang, **kwargs)
+                            
+#OLD                        if hasattr(self.wf_model, 'devPN') and self.wf_model.devPN is not None:
+#OLD                            strain_full = self.GWstrain(fgrids, Mc, eta, dL, theta, phi, iota, psi, tcoal, Phicoal, chiS, chiA, chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, ecc, deltaPN, rot=i*60., is_m1m2=use_m1m2, is_chi1chi2=use_chi1chi2, is_prec_ang=use_prec_ang, **kwargs)
                         SNRDerivs = onp.zeros((nParams,len(Mc)))
                         for alpha in range(nParams):
                             SNRDerivs[alpha,:] = 4.*onp.trapz((strain_full*onp.conjugate(FisherDerivs[alpha,:,:]).T).real/strainGrids.real, fgrids.real, axis=0)
@@ -1035,12 +1159,26 @@ class GWSignal(object):
                     #Fisher += tmpFisher
             else:
             # The signal in 3 arms sums to zero for geometrical reasons, so we can use this to skip some calculations
-            
                 # Compute derivatives
-                if hasattr(self.wf_model, 'devPN') and self.wf_model.devPN is not None:
-                    FisherDerivs1 = self._SignalDerivatives_use(fgrids, Mc, eta, dL, theta, phi, iota, psi, tcoal, Phicoal, chiS, chiA, chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, ecc, deltaPN, rot=0., use_m1m2=use_m1m2, use_chi1chi2=use_chi1chi2, use_prec_ang=use_prec_ang, computeAnalyticalDeriv=computeAnalyticalDeriv, computeDerivFinDiff=computeDerivFinDiff, **kwargs)
+                if devPN_val == 1:
+                    Phis = [phi_map[i] for i in self.wf_model.orderPN]
+                    FisherDerivs1 = self._SignalDerivatives_use(fgrids=fgrids, Mc=Mc, eta=eta, dL=dL, theta=theta, phi=phi, iota=iota, psi=psi, tcoal=tcoal, Phicoal=Phicoal, chiS=chiS, chiA=chiA, chi1x=chi1x, chi2x=chi2x, chi1y=chi1y, chi2y=chi2y, LambdaTilde=LambdaTilde, deltaLambda=deltaLambda, ecc=ecc, **{f'Phi_{self.wf_model.orderPN[0]}': Phis[0]}, rot=0., use_m1m2=use_m1m2, use_chi1chi2=use_chi1chi2, use_prec_ang=use_prec_ang, computeAnalyticalDeriv=computeAnalyticalDeriv, computeDerivFinDiff=computeDerivFinDiff, **kwargs)
+                
+                elif devPN_val == 2:
+                    Phis = [phi_map[i] for i in self.wf_model.orderPN]
+                    FisherDerivs1 = self._SignalDerivatives_use(fgrids=fgrids, Mc=Mc, eta=eta, dL=dL, theta=theta, phi=phi, iota=iota, psi=psi, tcoal=tcoal, Phicoal=Phicoal, chiS=chiS, chiA=chiA, chi1x=chi1x, chi2x=chi2x, chi1y=chi1y, chi2y=chi2y, LambdaTilde=LambdaTilde, deltaLambda=deltaLambda, ecc=ecc, **{f'Phi_{self.wf_model.orderPN[0]}': Phis[0]}, **{f'Phi_{self.wf_model.orderPN[1]}': Phis[1]}, rot=0., use_m1m2=use_m1m2, use_chi1chi2=use_chi1chi2, use_prec_ang=use_prec_ang, computeAnalyticalDeriv=computeAnalyticalDeriv, computeDerivFinDiff=computeDerivFinDiff, **kwargs)
+                
+                elif devPN_val == 5:
+                    Phis = [phi_map[i] for i in self.wf_model.orderPN]
+                    FisherDerivs1 = self._SignalDerivatives_use(fgrids=fgrids, Mc=Mc, eta=eta, dL=dL, theta=theta, phi=phi, iota=iota, psi=psi, tcoal=tcoal, Phicoal=Phicoal, chiS=chiS, chiA=chiA, chi1x=chi1x, chi2x=chi2x, chi1y=chi1y, chi2y=chi2y, LambdaTilde=LambdaTilde, deltaLambda=deltaLambda, ecc=ecc, **{f'Phi_{self.wf_model.orderPN[0]}': Phis[0]}, **{f'Phi_{self.wf_model.orderPN[1]}': Phis[1]}, **{f'Phi_{self.wf_model.orderPN[2]}': Phis[2]}, **{f'Phi_{self.wf_model.orderPN[3]}': Phis[3]}, **{f'Phi_{self.wf_model.orderPN[4]}': Phis[4]}, rot=0., use_m1m2=use_m1m2, use_chi1chi2=use_chi1chi2, use_prec_ang=use_prec_ang, computeAnalyticalDeriv=computeAnalyticalDeriv, computeDerivFinDiff=computeDerivFinDiff, **kwargs)
+                elif devPN_val == 7:
+                    Phis = [phi_map[i] for i in self.wf_model.orderPN]
+                    FisherDerivs1 = self._SignalDerivatives_use(fgrids=fgrids, Mc=Mc, eta=eta, dL=dL, theta=theta, phi=phi, iota=iota, psi=psi, tcoal=tcoal, Phicoal=Phicoal, chiS=chiS, chiA=chiA, chi1x=chi1x, chi2x=chi2x, chi1y=chi1y, chi2y=chi2y, LambdaTilde=LambdaTilde, deltaLambda=deltaLambda, ecc=ecc, **{f'Phi_{self.wf_model.orderPN[0]}': Phis[0]}, **{f'Phi_{self.wf_model.orderPN[1]}': Phis[1]}, **{f'Phi_{self.wf_model.orderPN[2]}': Phis[2]}, **{f'Phi_{self.wf_model.orderPN[3]}': Phis[3]}, **{f'Phi_{self.wf_model.orderPN[4]}': Phis[4]}, **{f'Phi_{self.wf_model.orderPN[5]}': Phis[5]}, **{f'Phi_{self.wf_model.orderPN[6]}': Phis[6]}, rot=0., use_m1m2=use_m1m2, use_chi1chi2=use_chi1chi2, use_prec_ang=use_prec_ang, computeAnalyticalDeriv=computeAnalyticalDeriv, computeDerivFinDiff=computeDerivFinDiff, **kwargs)
+                
                 else:
-                    FisherDerivs1 = self._SignalDerivatives_use(fgrids, Mc, eta, dL, theta, phi, iota, psi, tcoal, Phicoal, chiS, chiA, chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, ecc, rot=0., use_m1m2=use_m1m2, use_chi1chi2=use_chi1chi2, use_prec_ang=use_prec_ang, computeAnalyticalDeriv=computeAnalyticalDeriv, computeDerivFinDiff=computeDerivFinDiff, **kwargs)
+                    FisherDerivs1 = self._SignalDerivatives_use(fgrids=fgrids, Mc=Mc, eta=eta, dL=dL, theta=theta, phi=phi, iota=iota, psi=psi, tcoal=tcoal, Phicoal=Phicoal, chiS=chiS, chiA=chiA, chi1x=chi1x, chi2x=chi2x, chi1y=chi1y, chi2y=chi2y, LambdaTilde=LambdaTilde, deltaLambda=deltaLambda, ecc=ecc, rot=0., use_m1m2=use_m1m2, use_chi1chi2=use_chi1chi2, use_prec_ang=use_prec_ang, computeAnalyticalDeriv=computeAnalyticalDeriv, computeDerivFinDiff=computeDerivFinDiff, **kwargs)
+#OLD                if hasattr(self.wf_model, 'devPN') and self.wf_model.devPN is not None:
+#OLD                    FisherDerivs1 = self._SignalDerivatives_use(fgrids, Mc, eta, dL, theta, phi, iota, psi, tcoal, Phicoal, chiS, chiA, chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, ecc, deltaPN, rot=0., use_m1m2=use_m1m2, use_chi1chi2=use_chi1chi2, use_prec_ang=use_prec_ang, computeAnalyticalDeriv=computeAnalyticalDeriv, computeDerivFinDiff=computeDerivFinDiff, **kwargs)
                     
                 # Change the units of the tcoal derivative from days to seconds (this improves conditioning)
                 FisherDerivs1 = onp.array(FisherDerivs1)
@@ -1071,21 +1209,52 @@ class GWSignal(object):
                 if return_derivatives:
                     allDerivs.append(FisherDerivs1_)
                 if return_SNR_derivatives:
-                    if hasattr(self.wf_model, 'devPN') and self.wf_model.devPN is not None:
-                         strain_full1 = self.GWstrain(fgrids, Mc, eta, dL, theta, phi, iota, psi, tcoal, Phicoal, chiS, chiA, chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, ecc, deltaPN, rot=0., is_m1m2=use_m1m2, is_chi1chi2=use_chi1chi2, is_prec_ang=use_prec_ang, **kwargs)
+                    if devPN_val == 1:
+                        Phis = [phi_map[i] for i in self.wf_model.orderPN]
+                        strain_full1 = self.GWstrain(fgrids, Mc=Mc, eta=eta, dL=dL, theta=theta, phi=phi, iota=iota, psi=psi, tcoal=tcoal, Phicoal=Phicoal, chiS=chiS, chiA=chiA, chi1x=chi1x, chi2x=chi2x, chi1y=chi1y, chi2y=chi2y, LambdaTilde=LambdaTilde, deltaLambda=deltaLambda, ecc=ecc, **{f'Phi_{self.wf_model.orderPN[0]}': Phis[0]}, rot=0., is_m1m2=use_m1m2, is_chi1chi2=use_chi1chi2, is_prec_ang=use_prec_ang, **kwargs)
+                    
+                    elif devPN_val == 2:
+                        Phis = [phi_map[i] for i in self.wf_model.orderPN]
+                        strain_full1 = self.GWstrain(fgrids, Mc=Mc, eta=eta, dL=dL, theta=theta, phi=phi, iota=iota, psi=psi, tcoal=tcoal, Phicoal=Phicoal, chiS=chiS, chiA=chiA, chi1x=chi1x, chi2x=chi2x, chi1y=chi1y, chi2y=chi2y, LambdaTilde=LambdaTilde, deltaLambda=deltaLambda, ecc=ecc, **{f'Phi_{self.wf_model.orderPN[0]}': Phis[0]}, **{f'Phi_{self.wf_model.orderPN[1]}': Phis[1]}, rot=0., is_m1m2=use_m1m2, is_chi1chi2=use_chi1chi2, is_prec_ang=use_prec_ang, **kwargs)
+                    
+                    elif devPN_val == 5:
+                        Phis = [phi_map[i] for i in self.wf_model.orderPN]
+                        strain_full1 = self.GWstrain(fgrids, Mc=Mc, eta=eta, dL=dL, theta=theta, phi=phi, iota=iota, psi=psi, tcoal=tcoal, Phicoal=Phicoal, chiS=chiS, chiA=chiA, chi1x=chi1x, chi2x=chi2x, chi1y=chi1y, chi2y=chi2y, LambdaTilde=LambdaTilde, deltaLambda=deltaLambda, ecc=ecc, **{f'Phi_{self.wf_model.orderPN[0]}': Phis[0]}, **{f'Phi_{self.wf_model.orderPN[1]}': Phis[1]}, **{f'Phi_{self.wf_model.orderPN[2]}': Phis[2]}, **{f'Phi_{self.wf_model.orderPN[3]}': Phis[3]}, **{f'Phi_{self.wf_model.orderPN[4]}': Phis[4]}, rot=0., is_m1m2=use_m1m2, is_chi1chi2=use_chi1chi2, is_prec_ang=use_prec_ang, **kwargs)
+
+                    elif devPN_val == 7:
+                        Phis = [phi_map[i] for i in self.wf_model.orderPN]
+                        strain_full1 = self.GWstrain(fgrids, Mc=Mc, eta=eta, dL=dL, theta=theta, phi=phi, iota=iota, psi=psi, tcoal=tcoal, Phicoal=Phicoal, chiS=chiS, chiA=chiA, chi1x=chi1x, chi2x=chi2x, chi1y=chi1y, chi2y=chi2y, LambdaTilde=LambdaTilde, deltaLambda=deltaLambda, ecc=ecc, **{f'Phi_{self.wf_model.orderPN[0]}': Phis[0]}, **{f'Phi_{self.wf_model.orderPN[1]}': Phis[1]}, **{f'Phi_{self.wf_model.orderPN[2]}': Phis[2]}, **{f'Phi_{self.wf_model.orderPN[3]}': Phis[3]}, **{f'Phi_{self.wf_model.orderPN[4]}': Phis[4]}, **{f'Phi_{self.wf_model.orderPN[5]}': Phis[5]}, **{f'Phi_{self.wf_model.orderPN[6]}': Phis[6]}, rot=0., is_m1m2=use_m1m2, is_chi1chi2=use_chi1chi2, is_prec_ang=use_prec_ang, **kwargs)
+                    
                     else:
-                        strain_full1 = self.GWstrain(fgrids, Mc, eta, dL, theta, phi, iota, psi, tcoal, Phicoal, chiS, chiA, chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, ecc, rot=0., is_m1m2=use_m1m2, is_chi1chi2=use_chi1chi2, is_prec_ang=use_prec_ang, **kwargs)
+                        strain_full1 = self.GWstrain(fgrids, Mc=Mc, eta=eta, dL=dL, theta=theta, phi=phi, iota=iota, psi=psi, tcoal=tcoal, Phicoal=Phicoal, chiS=chiS, chiA=chiA, chi1x=chi1x, chi2x=chi2x, chi1y=chi1y, chi2y=chi2y, LambdaTilde=LambdaTilde, deltaLambda=deltaLambda, ecc=ecc, rot=0., is_m1m2=use_m1m2, is_chi1chi2=use_chi1chi2, is_prec_ang=use_prec_ang, **kwargs)
 
                     SNRDerivs = onp.zeros((nParams,len(Mc)))
                     for alpha in range(nParams):
                         SNRDerivs[alpha,:] = 4.*onp.trapz((strain_full1*onp.conjugate(FisherDerivs1_[alpha,:,:]).T).real/strainGrids.real, fgrids.real, axis=0)
                     allSNRDerivs.append(SNRDerivs)
+                    
+#OLD                if hasattr(self.wf_model, 'devPN') and self.wf_model.devPN is not None:
+#OLD                    FisherDerivs2 = self._SignalDerivatives_use(fgrids, Mc, eta, dL, theta, phi, iota, psi, tcoal, Phicoal, chiS, chiA, chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, ecc, deltaPN, rot=60., use_m1m2=use_m1m2, use_chi1chi2=use_chi1chi2, use_prec_ang=use_prec_ang, computeAnalyticalDeriv=computeAnalyticalDeriv, computeDerivFinDiff=computeDerivFinDiff, **kwargs)
 
-                if hasattr(self.wf_model, 'devPN') and self.wf_model.devPN is not None:
-                    FisherDerivs2 = self._SignalDerivatives_use(fgrids, Mc, eta, dL, theta, phi, iota, psi, tcoal, Phicoal, chiS, chiA, chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, ecc, deltaPN, rot=60., use_m1m2=use_m1m2, use_chi1chi2=use_chi1chi2, use_prec_ang=use_prec_ang, computeAnalyticalDeriv=computeAnalyticalDeriv, computeDerivFinDiff=computeDerivFinDiff, **kwargs)
+                if devPN_val == 1:
+                    Phis = [phi_map[i] for i in self.wf_model.orderPN]
+                    FisherDerivs2 = self._SignalDerivatives_use(fgrids, Mc=Mc, eta=eta, dL=dL, theta=theta, phi=phi, iota=iota, psi=psi, tcoal=tcoal, Phicoal=Phicoal, chiS=chiS, chiA=chiA, chi1x=chi1x, chi2x=chi2x, chi1y=chi1y, chi2y=chi2y, LambdaTilde=LambdaTilde, deltaLambda=deltaLambda, ecc=ecc, **{f'Phi_{self.wf_model.orderPN[0]}': Phis[0]}, rot=60., use_m1m2=use_m1m2, use_chi1chi2=use_chi1chi2, use_prec_ang=use_prec_ang, computeAnalyticalDeriv=computeAnalyticalDeriv, computeDerivFinDiff=computeDerivFinDiff, **kwargs)
+                
+                elif devPN_val == 2:
+                    Phis = [phi_map[i] for i in self.wf_model.orderPN]
+                    FisherDerivs2 = self._SignalDerivatives_use(fgrids, Mc=Mc, eta=eta, dL=dL, theta=theta, phi=phi, iota=iota, psi=psi, tcoal=tcoal, Phicoal=Phicoal, chiS=chiS, chiA=chiA, chi1x=chi1x, chi2x=chi2x, chi1y=chi1y, chi2y=chi2y, LambdaTilde=LambdaTilde, deltaLambda=deltaLambda, ecc=ecc, **{f'Phi_{self.wf_model.orderPN[0]}': Phis[0]}, **{f'Phi_{self.wf_model.orderPN[1]}': Phis[1]}, rot=60., use_m1m2=use_m1m2, use_chi1chi2=use_chi1chi2, use_prec_ang=use_prec_ang, computeAnalyticalDeriv=computeAnalyticalDeriv, computeDerivFinDiff=computeDerivFinDiff, **kwargs)
+                
+                elif devPN_val == 5:
+                    Phis = [phi_map[i] for i in self.wf_model.orderPN]
+                    FisherDerivs2 = self._SignalDerivatives_use(fgrids, Mc=Mc, eta=eta, dL=dL, theta=theta, phi=phi, iota=iota, psi=psi, tcoal=tcoal, Phicoal=Phicoal, chiS=chiS, chiA=chiA, chi1x=chi1x, chi2x=chi2x, chi1y=chi1y, chi2y=chi2y, LambdaTilde=LambdaTilde, deltaLambda=deltaLambda, ecc=ecc, **{f'Phi_{self.wf_model.orderPN[0]}': Phis[0]}, **{f'Phi_{self.wf_model.orderPN[1]}': Phis[1]}, **{f'Phi_{self.wf_model.orderPN[2]}': Phis[2]}, **{f'Phi_{self.wf_model.orderPN[3]}': Phis[3]}, **{f'Phi_{self.wf_model.orderPN[4]}': Phis[4]}, rot=60., use_m1m2=use_m1m2, use_chi1chi2=use_chi1chi2, use_prec_ang=use_prec_ang, computeAnalyticalDeriv=computeAnalyticalDeriv, computeDerivFinDiff=computeDerivFinDiff, **kwargs)
+
+                elif devPN_val == 7:
+                    Phis = [phi_map[i] for i in self.wf_model.orderPN]
+                    FisherDerivs2 = self._SignalDerivatives_use(fgrids, Mc=Mc, eta=eta, dL=dL, theta=theta, phi=phi, iota=iota, psi=psi, tcoal=tcoal, Phicoal=Phicoal, chiS=chiS, chiA=chiA, chi1x=chi1x, chi2x=chi2x, chi1y=chi1y, chi2y=chi2y, LambdaTilde=LambdaTilde, deltaLambda=deltaLambda, ecc=ecc, **{f'Phi_{self.wf_model.orderPN[0]}': Phis[0]}, **{f'Phi_{self.wf_model.orderPN[1]}': Phis[1]}, **{f'Phi_{self.wf_model.orderPN[2]}': Phis[2]}, **{f'Phi_{self.wf_model.orderPN[3]}': Phis[3]}, **{f'Phi_{self.wf_model.orderPN[4]}': Phis[4]}, **{f'Phi_{self.wf_model.orderPN[5]}': Phis[5]}, **{f'Phi_{self.wf_model.orderPN[6]}': Phis[6]}, rot=60., use_m1m2=use_m1m2, use_chi1chi2=use_chi1chi2, use_prec_ang=use_prec_ang, computeAnalyticalDeriv=computeAnalyticalDeriv, computeDerivFinDiff=computeDerivFinDiff, **kwargs)
+                
                 else:
-                    FisherDerivs2 = self._SignalDerivatives_use(fgrids, Mc, eta, dL, theta, phi, iota, psi, tcoal, Phicoal, chiS, chiA, chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, ecc, rot=60., use_m1m2=use_m1m2, use_chi1chi2=use_chi1chi2, use_prec_ang=use_prec_ang, computeAnalyticalDeriv=computeAnalyticalDeriv, computeDerivFinDiff=computeDerivFinDiff, **kwargs)              
-              
+                    FisherDerivs2 = self._SignalDerivatives_use(fgrids, Mc=Mc, eta=eta, dL=dL, theta=theta, phi=phi, iota=iota, psi=psi, tcoal=tcoal, Phicoal=Phicoal, chiS=chiS, chiA=chiA, chi1x=chi1x, chi2x=chi2x, chi1y=chi1y, chi2y=chi2y, LambdaTilde=LambdaTilde, deltaLambda=deltaLambda, ecc=ecc, rot=60., use_m1m2=use_m1m2, use_chi1chi2=use_chi1chi2, use_prec_ang=use_prec_ang, computeAnalyticalDeriv=computeAnalyticalDeriv, computeDerivFinDiff=computeDerivFinDiff, **kwargs)
+                
                 FisherDerivs2 = onp.array(FisherDerivs2)
                 FisherDerivs2[tcelem,:,:] /= (3600.*24.)
                 FisherIntegrands = (onp.conjugate(FisherDerivs2[:,:,onp.newaxis,:])*FisherDerivs2.transpose(1,0,2))
@@ -1113,11 +1282,29 @@ class GWSignal(object):
                 if return_derivatives:
                     allDerivs.append(FisherDerivs2_)
                 if return_SNR_derivatives:
-                    if hasattr(self.wf_model, 'devPN') and self.wf_model.devPN is not None:
-                        strain_full2 = self.GWstrain(fgrids, Mc, eta, dL, theta, phi, iota, psi, tcoal, Phicoal, chiS, chiA, chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, ecc, deltaPN, rot=60., is_m1m2=use_m1m2, is_chi1chi2=use_chi1chi2, is_prec_ang=use_prec_ang, **kwargs)
+
+                    if devPN_val == 1:
+                        Phis = [phi_map[i] for i in self.wf_model.orderPN]
+                        strain_full2 = self.GWstrain(fgrids, Mc=Mc, eta=eta, dL=dL, theta=theta, phi=phi, iota=iota, psi=psi, tcoal=tcoal, Phicoal=Phicoal, chiS=chiS, chiA=chiA, chi1x=chi1x, chi2x=chi2x, chi1y=chi1y, chi2y=chi2y, LambdaTilde=LambdaTilde, deltaLambda=deltaLambda, ecc=ecc, **{f'Phi_{self.wf_model.orderPN[0]}': Phis[0]}, rot=60., is_m1m2=use_m1m2, is_chi1chi2=use_chi1chi2, is_prec_ang=use_prec_ang, **kwargs)
+                    
+                    elif devPN_val == 2:
+                        Phis = [phi_map[i] for i in self.wf_model.orderPN]
+                        strain_full2 = self.GWstrain(fgrids, Mc=Mc, eta=eta, dL=dL, theta=theta, phi=phi, iota=iota, psi=psi, tcoal=tcoal, Phicoal=Phicoal, chiS=chiS, chiA=chiA, chi1x=chi1x, chi2x=chi2x, chi1y=chi1y, chi2y=chi2y, LambdaTilde=LambdaTilde, deltaLambda=deltaLambda, ecc=ecc, **{f'Phi_{self.wf_model.orderPN[0]}': Phis[0]}, **{f'Phi_{self.wf_model.orderPN[1]}': Phis[1]}, rot=60., is_m1m2=use_m1m2, is_chi1chi2=use_chi1chi2, is_prec_ang=use_prec_ang, **kwargs)
+                    
+                    elif devPN_val == 5:
+                        Phis = [phi_map[i] for i in self.wf_model.orderPN]
+                        strain_full2 = self.GWstrain(fgrids, Mc=Mc, eta=eta, dL=dL, theta=theta, phi=phi, iota=iota, psi=psi, tcoal=tcoal, Phicoal=Phicoal, chiS=chiS, chiA=chiA, chi1x=chi1x, chi2x=chi2x, chi1y=chi1y, chi2y=chi2y, LambdaTilde=LambdaTilde, deltaLambda=deltaLambda, ecc=ecc, **{f'Phi_{self.wf_model.orderPN[0]}': Phis[0]}, **{f'Phi_{self.wf_model.orderPN[1]}': Phis[1]}, **{f'Phi_{self.wf_model.orderPN[2]}': Phis[2]}, **{f'Phi_{self.wf_model.orderPN[3]}': Phis[3]}, **{f'Phi_{self.wf_model.orderPN[4]}': Phis[4]}, rot=60., is_m1m2=use_m1m2, is_chi1chi2=use_chi1chi2, is_prec_ang=use_prec_ang, **kwargs)
+
+                    elif devPN_val == 7:
+                        Phis = [phi_map[i] for i in self.wf_model.orderPN]
+                        strain_full2 = self.GWstrain(fgrids, Mc=Mc, eta=eta, dL=dL, theta=theta, phi=phi, iota=iota, psi=psi, tcoal=tcoal, Phicoal=Phicoal, chiS=chiS, chiA=chiA, chi1x=chi1x, chi2x=chi2x, chi1y=chi1y, chi2y=chi2y, LambdaTilde=LambdaTilde, deltaLambda=deltaLambda, ecc=ecc, **{f'Phi_{self.wf_model.orderPN[0]}': Phis[0]}, **{f'Phi_{self.wf_model.orderPN[1]}': Phis[1]}, **{f'Phi_{self.wf_model.orderPN[2]}': Phis[2]}, **{f'Phi_{self.wf_model.orderPN[3]}': Phis[3]}, **{f'Phi_{self.wf_model.orderPN[4]}': Phis[4]}, **{f'Phi_{self.wf_model.orderPN[5]}': Phis[5]}, **{f'Phi_{self.wf_model.orderPN[6]}': Phis[6]}, rot=60., is_m1m2=use_m1m2, is_chi1chi2=use_chi1chi2, is_prec_ang=use_prec_ang, **kwargs)
+                    
                     else:
-                        strain_full2 = self.GWstrain(fgrids, Mc, eta, dL, theta, phi, iota, psi, tcoal, Phicoal, chiS, chiA, chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, ecc, rot=60., is_m1m2=use_m1m2, is_chi1chi2=use_chi1chi2, is_prec_ang=use_prec_ang, **kwargs)
-                        
+                        strain_full2 = self.GWstrain(fgrids, Mc=Mc, eta=eta, dL=dL, theta=theta, phi=phi, iota=iota, psi=psi, tcoal=tcoal, Phicoal=Phicoal, chiS=chiS, chiA=chiA, chi1x=chi1x, chi2x=chi2x, chi1y=chi1y, chi2y=chi2y, LambdaTilde=LambdaTilde, deltaLambda=deltaLambda, ecc=ecc, rot=60., is_m1m2=use_m1m2, is_chi1chi2=use_chi1chi2, is_prec_ang=use_prec_ang, **kwargs)
+                    
+#OLD                    if hasattr(self.wf_model, 'devPN') and self.wf_model.devPN is not None:
+#OLD                        strain_full2 = self.GWstrain(fgrids, Mc, eta, dL, theta, phi, iota, psi, tcoal, Phicoal, chiS, chiA, chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, ecc, deltaPN, rot=60., is_m1m2=use_m1m2, is_chi1chi2=use_chi1chi2, is_prec_ang=use_prec_ang, **kwargs)
+                    
                     SNRDerivs = onp.zeros((nParams,len(Mc)))
                     for alpha in range(nParams):
                         SNRDerivs[alpha,:] = 4.*onp.trapz((strain_full2*onp.conjugate(FisherDerivs2_[alpha,:,:]).T).real/strainGrids.real, fgrids.real, axis=0)
@@ -1167,8 +1354,10 @@ class GWSignal(object):
                 return allFishers, allSNRDerivs
     
     
-    def _SignalDerivatives(self, fgrids, Mc, eta, dL, theta, phi, iota, psi, tcoal, Phicoal, chiS, chiA, chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, ecc, deltaPN=None, rot=0., use_m1m2=False, use_chi1chi2=True, use_prec_ang=True, computeDerivFinDiff=False, computeAnalyticalDeriv=True, stepNDT=MaxStepGenerator(base_step=1e-5), methodNDT='central', **kwargs):   
-###OFF    def _SignalDerivatives(self, fgrids, Mc, eta, dL, theta, phi, iota, psi, tcoal, Phicoal, chiS, chiA, chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, ecc, rot=0., use_m1m2=False, use_chi1chi2=True, use_prec_ang=True, computeDerivFinDiff=False, computeAnalyticalDeriv=True, stepNDT=MaxStepGenerator(base_step=1e-5), methodNDT='central', **kwargs):
+    def _SignalDerivatives(self, fgrids, Mc, eta, dL, theta, phi, iota, psi, tcoal, Phicoal, chiS, chiA, chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, ecc, Phi_0=None, Phi_1=None, Phi_2=None, Phi_3=None, Phi_4=None, Phi_5=None, Phi_6=None, Phi_7=None, rot=0., use_m1m2=False, use_chi1chi2=True, use_prec_ang=True, computeDerivFinDiff=False, computeAnalyticalDeriv=True, stepNDT=MaxStepGenerator(base_step=1e-5), methodNDT='central', **kwargs):   
+#Phi_2=None, Phi_3=None, Phi_4=None, Phi_5=None, Phi_6=None, Phi_7=None,
+        
+#OLD    def _SignalDerivatives(self, fgrids, Mc, eta, dL, theta, phi, iota, psi, tcoal, Phicoal, chiS, chiA, chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, ecc, deltaPN=None, rot=0., use_m1m2=False, use_chi1chi2=True, use_prec_ang=True, computeDerivFinDiff=False, computeAnalyticalDeriv=True, stepNDT=MaxStepGenerator(base_step=1e-5), methodNDT='central', **kwargs):
         """
         Compute the derivatives of the GW strain with respect to the parameters of the event(s) at given frequencies (in :math:`\\rm Hz`).
         
@@ -1214,86 +1403,162 @@ class GWSignal(object):
                 print('WARNING: In the Newtonian inspiral case the mass ratio and spins do not enter the waveform, and the corresponding Fisher matrix elements vanish, we then discard them.\n')
             
             if computeAnalyticalDeriv:
-                derivargs = (1)
+                derivargs_base = [1]
                 inputNumdL, inputNumiota = 1, 2
             else:
-                if hasattr(self.wf_model, 'devPN') and self.wf_model.devPN is not None:
-                    derivargs = (1,3,4,5,6,7,8,9,19)
-                else:
-                    derivargs = (1,3,4,5,6,7,8,9)
+                #if hasattr(self.wf_model, 'devPN') and self.wf_model.devPN==1:
+                    #derivargs = (1,3,4,5,6,7,8,9,19,20,21,22,23)
+                    #derivargs = (1,3,4,5,6,7,8,9,19,20,21,22,23,24,25,26)
+                #else:
+                derivargs_base = [1,3,4,5,6,7,8,9]
+#OLD                if hasattr(self.wf_model, 'devPN') and self.wf_model.devPN is not None:
+#OLD                    derivargs = (1,3,4,5,6,7,8,9,19)
             
         else:
             if computeAnalyticalDeriv:
                 if (not self.wf_model.is_HigherModes) and (not self.wf_model.is_Precessing):
-                    if hasattr(self.wf_model, 'devPN') and self.wf_model.devPN is not None:
-                        derivargs = (1,2,10,11,16,17,19)
-                    else:
-                        derivargs = (1,2,10,11,16,17)
+                    derivargs_base = [1,2,10,11,16,17]
+#OLD                    if hasattr(self.wf_model, 'devPN') and self.wf_model.devPN is not None:
+#OLD                        derivargs = (1,2,10,11,16,17,19)
                 elif self.wf_model.is_Precessing:
-                    if hasattr(self.wf_model, 'devPN') and self.wf_model.devPN is not None:
-                        derivargs = (1,2,6,10,11,12,13,14,15,16,17,19)
-                    else:
-                        derivargs = (1,2,6,10,11,12,13,14,15,16,17)
+#OLD                    if hasattr(self.wf_model, 'devPN') and self.wf_model.devPN is not None:
+#OLD                        derivargs = (1,2,6,10,11,12,13,14,15,16,17,19)
+                    derivargs_base = [1,2,6,10,11,12,13,14,15,16,17]
                 elif (not self.wf_model.is_Precessing) and self.wf_model.is_HigherModes:
-                    if hasattr(self.wf_model, 'devPN') and self.wf_model.devPN is not None:
-                        derivargs = (1,2,6,10,11,16,17,19)
-                    else:
-                        derivargs = (1,2,6,10,11,16,17)
+                    derivargs_base = [1,2,6,10,11,16,17]
+#OLD                    if hasattr(self.wf_model, 'devPN') and self.wf_model.devPN is not None:
+#OLD                        derivargs = (1,2,6,10,11,16,17,19)
                 inputNumdL, inputNumiota = 2, 3
             else:
                 if not self.wf_model.is_Precessing:
-                    if hasattr(self.wf_model, 'devPN') and self.wf_model.devPN is not None:
-                        derivargs = (1,2,3,4,5,6,7,8,9,10,11,16,17,19)
-                    else:
-                        derivargs = (1,2,3,4,5,6,7,8,9,10,11,16,17)
+#OLD                    if hasattr(self.wf_model, 'devPN') and self.wf_model.devPN is not None:
+#OLD                        derivargs = (1,2,3,4,5,6,7,8,9,10,11,16,17,19)
+                    derivargs_base = [1,2,3,4,5,6,7,8,9,10,11,16,17]
                 else:
-                    if hasattr(self.wf_model, 'devPN') and self.wf_model.devPN is not None:
-                        derivargs = (1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,19)
-                    else:
-                        derivargs = (1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17)
+#OLD                    if hasattr(self.wf_model, 'devPN') and self.wf_model.devPN is not None:
+#OLD                        derivargs = (1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,19)
+                    derivargs_base = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17]
                         
         if not self.wf_model.is_tidal:
-            if hasattr(self.wf_model, 'devPN') and self.wf_model.devPN is not None:
-                derivargs = derivargs[:-3] + (19,)
-            else: 
-                derivargs = derivargs[:-2]
+                derivargs_base = [arg for arg in derivargs_base if arg not in [16, 17]]
             
         if self.wf_model.is_eccentric:
-            if hasattr(self.wf_model, 'devPN') and self.wf_model.devPN is not None:
-                derivargs = derivargs + (18, 19)
-            else: 
-                derivargs = derivargs + (18)
-        
-        nParams = self.wf_model.nParams
+#OLD            if hasattr(self.wf_model, 'devPN') and self.wf_model.devPN is not None:
+#OLD                derivargs = derivargs + (18, 19) 
+            derivargs_base.append(18)
 
-###MOD        deltaPN = deltaPN.astype('complex128')
+        #Adding the index of Phi_i:
+        final_derivargs = list(derivargs_base)
+        if hasattr(self.wf_model, 'devPN') and self.wf_model.devPN > 0:
+            if isinstance(self.wf_model.orderPN, int):
+                active_orders = [self.wf_model.orderPN]
+            else:
+                active_orders = self.wf_model.orderPN
+            for order in active_orders:
+                phi_index = 19 + order
+                final_derivargs.append(phi_index)
+            
+        derivargs = tuple(sorted(final_derivargs))
+        nParams = self.wf_model.nParams
+        devPN_val = self.wf_model.devPN if hasattr(self.wf_model, 'devPN') and self.wf_model.devPN is not None else 0
+        phi_map = {0: Phi_0, 1: Phi_1, 2: Phi_2, 3: Phi_3, 4: Phi_4, 5: Phi_5, 6: Phi_6, 7: Phi_7}
         
         if not computeDerivFinDiff:
             if self.wf_model.is_holomorphic:
-                if hasattr(self.wf_model, 'devPN') and self.wf_model.devPN is not None:
-                    GWstrainUse = lambda f, Mc, eta, dL, theta, phi, iota, psi, tcoal, Phicoal, chiS, chiA, chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, ecc, deltaPN: self.GWstrain(f, Mc, eta, dL, theta, phi, iota, psi, tcoal, Phicoal, chiS, chiA, chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, ecc, deltaPN, rot=rot, is_m1m2=use_m1m2, is_chi1chi2=use_chi1chi2, is_prec_ang=use_prec_ang)
-                    FisherDerivs = np.asarray(vmap(jacrev(GWstrainUse, argnums=derivargs, holomorphic=True))(fgrids.T, Mc, eta, dL, theta, phi, iota, psi, tcoal, Phicoal, chiS, chiA, chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, ecc, deltaPN))
-                else:
-                    GWstrainUse = lambda f, Mc, eta, dL, theta, phi, iota, psi, tcoal, Phicoal, chiS, chiA, chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, ecc: self.GWstrain(f, Mc, eta, dL, theta, phi, iota, psi, tcoal, Phicoal, chiS, chiA, chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, ecc, rot=rot, is_m1m2=use_m1m2, is_chi1chi2=use_chi1chi2, is_prec_ang=use_prec_ang)
-                    FisherDerivs = np.asarray(vmap(jacrev(GWstrainUse, argnums=derivargs, holomorphic=True))(fgrids.T, Mc, eta, dL, theta, phi, iota, psi, tcoal, Phicoal, chiS, chiA, chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, ecc))
+                GWstrainUse = lambda f, Mc, eta, dL, theta, phi, iota, psi, tcoal, Phicoal, chiS, chiA, chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, ecc, P_0, P_1, P_2, P_3, P_4, P_5, P_6, P_7: self.GWstrain(f, Mc, eta, dL, theta, phi, iota, psi, tcoal, Phicoal, chiS, chiA, chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, ecc, P_0, P_1, P_2, P_3, P_4, P_5, P_6, P_7, rot=rot, is_m1m2=use_m1m2, is_chi1chi2=use_chi1chi2, is_prec_ang=use_prec_ang)
+                phi_values = [None] * 8
+                if hasattr(self.wf_model, 'devPN') and self.wf_model.devPN > 0:
+                    active_orders = self.wf_model.orderPN if isinstance(self.wf_model.orderPN, list) else [self.wf_model.orderPN]
+                    for order in active_orders:
+                        if order < len(phi_values):
+                            phi_values[order] = phi_map[order]
+                #if devPN_val == 1:
+                FisherDerivs = np.asarray(vmap(jacrev(GWstrainUse, argnums=derivargs, holomorphic=True))(fgrids.T, Mc, eta, dL, theta, phi, iota, psi, tcoal, Phicoal, chiS, chiA, chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, ecc, phi_values[0], phi_values[1],phi_values[2], phi_values[3],phi_values[4], phi_values[5],phi_values[6], phi_values[7]))                    
+                
+                   #GWstrainUse = lambda f, Mc, eta, dL, theta, phi, iota, psi, tcoal, Phicoal, chiS, chiA, chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, ecc, P_0: self.GWstrain(f, Mc, eta, dL, theta, phi, iota, psi, tcoal, Phicoal, chiS, chiA, chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, ecc, P_0, rot=rot, is_m1m2=use_m1m2, is_chi1chi2=use_chi1chi2, is_prec_ang=use_prec_ang)
+                   #Phi_0_val = phi_map[self.wf_model.orderPN[0]]
+                   #FisherDerivs = np.asarray(vmap(jacrev(GWstrainUse, argnums=derivargs, holomorphic=True))(fgrids.T, Mc, eta, dL, theta, phi, iota, psi, tcoal, Phicoal, chiS, chiA, chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, ecc, Phi_0_val))
+                #elif devPN_val == 2:
+
+                   #GWstrainUse = lambda f, Mc, eta, dL, theta, phi, iota, psi, tcoal, Phicoal, chiS, chiA, chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, ecc, P_0, P_1: self.GWstrain(f, Mc, eta, dL, theta, phi, iota, psi, tcoal, Phicoal, chiS, chiA, chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, ecc, P_0, P_1, rot=rot, is_m1m2=use_m1m2, is_chi1chi2=use_chi1chi2, is_prec_ang=use_prec_ang)
+                   #Phi_0_val = phi_map[self.wf_model.orderPN[0]]
+                   #Phi_1_val = phi_map[self.wf_model.orderPN[1]]
+                   
+                   #FisherDerivs = np.asarray(vmap(jacrev(GWstrainUse, argnums=derivargs, holomorphic=True))(fgrids.T, Mc, eta, dL, theta, phi, iota, psi, tcoal, Phicoal, chiS, chiA, chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, ecc, Phi_0_val, Phi_1_val))
+                
+               #elif devPN_val == 5:
+                   #GWstrainUse = lambda f, Mc, eta, dL, theta, phi, iota, psi, tcoal, Phicoal, chiS, chiA, chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, ecc, P_0, P_1, P_2, P_3, P_4: self.GWstrain(f, Mc, eta, dL, theta, phi, iota, psi, tcoal, Phicoal, chiS, chiA, chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, ecc, P_0, P_1, P_2, P_3, P_4, rot=rot, is_m1m2=use_m1m2, is_chi1chi2=use_chi1chi2, is_prec_ang=use_prec_ang)
+                   #Phi_0_val = phi_map[self.wf_model.orderPN[0]]
+                   #Phi_1_val = phi_map[self.wf_model.orderPN[1]]
+                   #Phi_2_val = phi_map[self.wf_model.orderPN[2]]
+                   #Phi_3_val = phi_map[self.wf_model.orderPN[3]]
+                   #Phi_4_val = phi_map[self.wf_model.orderPN[4]]
+                    
+                   #FisherDerivs = np.asarray(vmap(jacrev(GWstrainUse, argnums=derivargs, holomorphic=True))(fgrids.T, Mc, eta, dL, theta, phi, iota, psi, tcoal, Phicoal, chiS, chiA, chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, ecc, Phi_0_val, Phi_1_val, Phi_2_val, Phi_3_val, Phi_4_val))
+               
+               #else:
+                   #GWstrainUse = lambda f, Mc, eta, dL, theta, phi, iota, psi, tcoal, Phicoal, chiS, chiA, chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, ecc: self.GWstrain(f, Mc, eta, dL, theta, phi, iota, psi, tcoal, Phicoal, chiS, chiA, chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, ecc, rot=rot, is_m1m2=use_m1m2, is_chi1chi2=use_chi1chi2, is_prec_ang=use_prec_ang)
+                   #FisherDerivs = np.asarray(vmap(jacrev(GWstrainUse, argnums=derivargs, holomorphic=True))(fgrids.T, Mc, eta, dL, theta, phi, iota, psi, tcoal, Phicoal, chiS, chiA, chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, ecc))
+
                 
             # In the non holomorphic case, to improve the accuracy, we compute separately the derivatives of the real and imaginary part of the strain as real functions
             else:
-                if hasattr(self.wf_model, 'devPN') and self.wf_model.devPN is not None:
-                    fgrids, Mc, eta, dL, theta, phi, iota, psi, tcoal, Phicoal, chiS, chiA, chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, ecc, deltaPN = np.real(fgrids), np.real(Mc), np.real(eta), np.real(dL), np.real(theta), np.real(phi), np.real(iota), np.real(psi), np.real(tcoal), np.real(Phicoal), np.real(chiS), np.real(chiA), np.real(chi1x), np.real(chi2x), np.real(chi1y), np.real(chi2y), np.real(LambdaTilde), np.real(deltaLambda), np.real(ecc), np.real(deltaPN)
-                    GWstrainUse_real = lambda f, Mc, eta, dL, theta, phi, iota, psi, tcoal, Phicoal, chiS, chiA, chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, ecc, deltaPN: np.real(self.GWstrain(f, Mc, eta, dL, theta, phi, iota, psi, tcoal, Phicoal, chiS, chiA, chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, ecc, deltaPN, rot=rot, is_m1m2=use_m1m2, is_chi1chi2=use_chi1chi2, is_prec_ang=use_prec_ang))
-                    GWstrainUse_imag = lambda f, Mc, eta, dL, theta, phi, iota, psi, tcoal, Phicoal, chiS, chiA, chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, ecc, deltaPN: np.imag(self.GWstrain(f, Mc, eta, dL, theta, phi, iota, psi, tcoal, Phicoal, chiS, chiA, chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, ecc, deltaPN, rot=rot, is_m1m2=use_m1m2, is_chi1chi2=use_chi1chi2, is_prec_ang=use_prec_ang))
-                    realDerivs = np.asarray(vmap(jacrev(GWstrainUse_real, argnums=derivargs))(fgrids.T, Mc, eta, dL, theta, phi, iota, psi, tcoal, Phicoal, chiS, chiA, chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, ecc, deltaPN))
-                    imagDerivs = np.asarray(vmap(jacrev(GWstrainUse_imag, argnums=derivargs))(fgrids.T, Mc, eta, dL, theta, phi, iota, psi, tcoal, Phicoal, chiS, chiA, chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, ecc, deltaPN))
-                    FisherDerivs = realDerivs + 1j*imagDerivs
+                GWstrainUse_real = lambda f, Mc, eta, dL, theta, phi, iota, psi, tcoal, Phicoal, chiS, chiA, chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, ecc, P_0, P_1, P_2, P_3, P_4, P_5, P_6, P_7: np.real(self.GWstrain(f, Mc, eta, dL, theta, phi, iota, psi, tcoal, Phicoal, chiS, chiA, chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, ecc, P_0, P_1, P_2, P_3, P_4, P_5, P_6, P_7, rot=rot, is_m1m2=use_m1m2, is_chi1chi2=use_chi1chi2, is_prec_ang=use_prec_ang))
+                GWstrainUse_imag = lambda f, Mc, eta, dL, theta, phi, iota, psi, tcoal, Phicoal, chiS, chiA, chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, ecc, P_0, P_1, P_2, P_3, P_4, P_5, P_6, P_7: np.imag(self.GWstrain(f, Mc, eta, dL, theta, phi, iota, psi, tcoal, Phicoal, chiS, chiA, chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, ecc, P_0, P_1, P_2, P_3, P_4, P_5, P_6, P_7, rot=rot, is_m1m2=use_m1m2, is_chi1chi2=use_chi1chi2, is_prec_ang=use_prec_ang))
+                phi_values = [0.0] * 8
+                if hasattr(self.wf_model, 'devPN') and self.wf_model.devPN > 0:
+                    active_orders = self.wf_model.orderPN if isinstance(self.wf_model.orderPN, list) else [self.wf_model.orderPN]
+                    for order in active_orders:
+                        if order < len(phi_values):
+                            phi_values[order] = phi_map[order]
+
+                num_frequencies = fgrids.T.shape[0]
+                phi_values = [np.full(num_frequencies, val) for val in phi_values]
+
+                realDerivs = np.asarray(vmap(jacrev(GWstrainUse_real, argnums=derivargs))(np.real(fgrids).T, np.real(Mc), np.real(eta), np.real(dL), np.real(theta), np.real(phi), np.real(iota), np.real(psi), np.real(tcoal), np.real(Phicoal), np.real(chiS), np.real(chiA), np.real(chi1x), np.real(chi2x), np.real(chi1y), np.real(chi2y), np.real(LambdaTilde), np.real(deltaLambda), np.real(ecc), np.real(phi_values[0]), np.real(phi_values[1]), np.real(phi_values[2]), np.real(phi_values[3]), np.real(phi_values[4]), np.real(phi_values[5]), np.real(phi_values[6]), np.real(phi_values[7])))
+                imagDerivs = np.asarray(vmap(jacrev(GWstrainUse_imag, argnums=derivargs))(np.real(fgrids).T, np.real(Mc), np.real(eta), np.real(dL), np.real(theta), np.real(phi), np.real(iota), np.real(psi), np.real(tcoal), np.real(Phicoal), np.real(chiS), np.real(chiA), np.real(chi1x), np.real(chi2x), np.real(chi1y), np.real(chi2y), np.real(LambdaTilde), np.real(deltaLambda), np.real(ecc), np.real(phi_values[0]), np.real(phi_values[1]), np.real(phi_values[2]), np.real(phi_values[3]), np.real(phi_values[4]), np.real(phi_values[5]), np.real(phi_values[6]), np.real(phi_values[7])))
+
+                FisherDerivs = realDerivs + 1j * imagDerivs
+                
+                
+                #if devPN_val == 1:
+                    #GWstrainUse_real = lambda f, Mc, eta, dL, theta, phi, iota, psi, tcoal, Phicoal, chiS, chiA, chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, ecc, P_0: np.real(self.GWstrain(f, Mc, eta, dL, theta, phi, iota, psi, tcoal, Phicoal, chiS, chiA, chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, ecc, P_0, rot=rot, is_m1m2=use_m1m2, is_chi1chi2=use_chi1chi2, is_prec_ang=use_prec_ang))
+                   # GWstrainUse_imag = lambda f, Mc, eta, dL, theta, phi, iota, psi, tcoal, Phicoal, chiS, chiA, chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, ecc, P_0: np.imag(self.GWstrain(f, Mc, eta, dL, theta, phi, iota, psi, tcoal, Phicoal, chiS, chiA, chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, ecc, P_0, rot=rot, is_m1m2=use_m1m2, is_chi1chi2=use_chi1chi2, is_prec_ang=use_prec_ang))
                     
-                else:
-                    fgrids, Mc, eta, dL, theta, phi, iota, psi, tcoal, Phicoal, chiS, chiA, chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, eccs = np.real(fgrids), np.real(Mc), np.real(eta), np.real(dL), np.real(theta), np.real(phi), np.real(iota), np.real(psi), np.real(tcoal), np.real(Phicoal), np.real(chiS), np.real(chiA), np.real(chi1x), np.real(chi2x), np.real(chi1y), np.real(chi2y), np.real(LambdaTilde), np.real(deltaLambda), np.real(ecc)
-                    GWstrainUse_real = lambda f, Mc, eta, dL, theta, phi, iota, psi, tcoal, Phicoal, chiS, chiA, chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, ecc: np.real(self.GWstrain(f, Mc, eta, dL, theta, phi, iota, psi, tcoal, Phicoal, chiS, chiA, chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, ecc, rot=rot, is_m1m2=use_m1m2, is_chi1chi2=use_chi1chi2, is_prec_ang=use_prec_ang))
-                    GWstrainUse_imag = lambda f, Mc, eta, dL, theta, phi, iota, psi, tcoal, Phicoal, chiS, chiA, chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, ecc: np.imag(self.GWstrain(f, Mc, eta, dL, theta, phi, iota, psi, tcoal, Phicoal, chiS, chiA, chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, ecc, rot=rot, is_m1m2=use_m1m2, is_chi1chi2=use_chi1chi2, is_prec_ang=use_prec_ang))
-                    realDerivs = np.asarray(vmap(jacrev(GWstrainUse_real, argnums=derivargs))(fgrids.T, Mc, eta, dL, theta, phi, iota, psi, tcoal, Phicoal, chiS, chiA, chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, ecc))
-                    imagDerivs = np.asarray(vmap(jacrev(GWstrainUse_imag, argnums=derivargs))(fgrids.T, Mc, eta, dL, theta, phi, iota, psi, tcoal, Phicoal, chiS, chiA, chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, ecc))
-                    FisherDerivs = realDerivs + 1j*imagDerivs
+                    #Phi_0_val = phi_map[self.wf_model.orderPN[0]]
+            
+                    #realDerivs = np.asarray(vmap(jacrev(GWstrainUse_real, argnums=derivargs))(np.real(fgrids).T, np.real(Mc), np.real(eta), np.real(dL), np.real(theta), np.real(phi), np.real(iota), np.real(psi), np.real(tcoal), np.real(Phicoal), np.real(chiS), np.real(chiA), np.real(chi1x), np.real(chi2x), np.real(chi1y), np.real(chi2y), np.real(LambdaTilde), np.real(deltaLambda), np.real(ecc), np.real(Phi_0_val)))
+                    #imagDerivs = np.asarray(vmap(jacrev(GWstrainUse_imag, argnums=derivargs))(np.real(fgrids).T, np.real(Mc), np.real(eta), np.real(dL), np.real(theta), np.real(phi), np.real(iota), np.real(psi), np.real(tcoal), np.real(Phicoal), np.real(chiS), np.real(chiA), np.real(chi1x), np.real(chi2x), np.real(chi1y), np.real(chi2y), np.real(LambdaTilde), np.real(deltaLambda), np.real(ecc), np.real(Phi_0_val)))
+            
+                #elif devPN_val == 2:
+                    #GWstrainUse_real = lambda f, Mc, eta, dL, theta, phi, iota, psi, tcoal, Phicoal, chiS, chiA, chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, ecc, P_0, P_1: np.real(self.GWstrain(f, Mc, eta, dL, theta, phi, iota, psi, tcoal, Phicoal, chiS, chiA, chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, ecc, P_0, P_1, rot=rot, is_m1m2=use_m1m2, is_chi1chi2=use_chi1chi2, is_prec_ang=use_prec_ang))
+                    #GWstrainUse_imag = lambda f, Mc, eta, dL, theta, phi, iota, psi, tcoal, Phicoal, chiS, chiA, chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, ecc, P_0, P_1: np.imag(self.GWstrain(f, Mc, eta, dL, theta, phi, iota, psi, tcoal, Phicoal, chiS, chiA, chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, ecc, P_0, P_1, rot=rot, is_m1m2=use_m1m2, is_chi1chi2=use_chi1chi2, is_prec_ang=use_prec_ang))
+                    
+                    #Phi_0_val = phi_map[self.wf_model.orderPN[0]]
+                    #Phi_1_val = phi_map[self.wf_model.orderPN[1]]
+                    
+                    #realDerivs = np.asarray(vmap(jacrev(GWstrainUse_real, argnums=derivargs))(np.real(fgrids).T, np.real(Mc), np.real(eta), np.real(dL), np.real(theta), np.real(phi), np.real(iota), np.real(psi), np.real(tcoal), np.real(Phicoal), np.real(chiS), np.real(chiA), np.real(chi1x), np.real(chi2x), np.real(chi1y), np.real(chi2y), np.real(LambdaTilde), np.real(deltaLambda), np.real(ecc), np.real(Phi_0_val), np.real(Phi_1_val)))
+                    #imagDerivs = np.asarray(vmap(jacrev(GWstrainUse_imag, argnums=derivargs))(np.real(fgrids).T, np.real(Mc), np.real(eta), np.real(dL), np.real(theta), np.real(phi), np.real(iota), np.real(psi), np.real(tcoal), np.real(Phicoal), np.real(chiS), np.real(chiA), np.real(chi1x), np.real(chi2x), np.real(chi1y), np.real(chi2y), np.real(LambdaTilde), np.real(deltaLambda), np.real(ecc), np.real(Phi_0_val), np.real(Phi_1_val)))
+            
+                #elif devPN_val == 5:
+                    #GWstrainUse_real = lambda f, Mc, eta, dL, theta, phi, iota, psi, tcoal, Phicoal, chiS, chiA, chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, ecc, P_0, P_1, P_2, P_3, P_4: np.real(self.GWstrain(f, Mc, eta, dL, theta, phi, iota, psi, tcoal, Phicoal, chiS, chiA, chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, ecc, P_0, P_1, P_2, P_3, P_4, rot=rot, is_m1m2=use_m1m2, is_chi1chi2=use_chi1chi2, is_prec_ang=use_prec_ang))
+                    #GWstrainUse_imag = lambda f, Mc, eta, dL, theta, phi, iota, psi, tcoal, Phicoal, chiS, chiA, chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, ecc, P_0, P_1, P_2, P_3, P_4: np.imag(self.GWstrain(f, Mc, eta, dL, theta, phi, iota, psi, tcoal, Phicoal, chiS, chiA, chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, ecc, P_0, P_1, P_2, P_3, P_4, rot=rot, is_m1m2=use_m1m2, is_chi1chi2=use_chi1chi2, is_prec_ang=use_prec_ang))
+            
+                    #Phi_0_val = phi_map[self.wf_model.orderPN[0]]
+                    #Phi_1_val = phi_map[self.wf_model.orderPN[1]]
+                    #Phi_2_val = phi_map[self.wf_model.orderPN[2]]
+                    #Phi_3_val = phi_map[self.wf_model.orderPN[3]]
+                    #Phi_4_val = phi_map[self.wf_model.orderPN[4]]
+            
+                    #realDerivs = np.asarray(vmap(jacrev(GWstrainUse_real, argnums=derivargs))(np.real(fgrids).T, np.real(Mc), np.real(eta), np.real(dL), np.real(theta), np.real(phi), np.real(iota), np.real(psi), np.real(tcoal), np.real(Phicoal), np.real(chiS), np.real(chiA), np.real(chi1x), np.real(chi2x), np.real(chi1y), np.real(chi2y), np.real(LambdaTilde), np.real(deltaLambda), np.real(ecc), np.real(Phi_0_val), np.real(Phi_1_val), np.real(Phi_2_val), np.real(Phi_3_val), np.real(Phi_4_val)))
+                    #imagDerivs = np.asarray(vmap(jacrev(GWstrainUse_imag, argnums=derivargs))(np.real(fgrids).T, np.real(Mc), np.real(eta), np.real(dL), np.real(theta), np.real(phi), np.real(iota), np.real(psi), np.real(tcoal), np.real(Phicoal), np.real(chiS), np.real(chiA), np.real(chi1x), np.real(chi2x), np.real(chi1y), np.real(chi2y), np.real(LambdaTilde), np.real(deltaLambda), np.real(ecc), np.real(Phi_0_val), np.real(Phi_1_val), np.real(Phi_2_val), np.real(Phi_3_val), np.real(Phi_4_val)))
+            
+                #else:
+                    #GWstrainUse_real = lambda f, Mc, eta, dL, theta, phi, iota, psi, tcoal, Phicoal, chiS, chiA, chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, ecc: np.real(self.GWstrain(f, Mc, eta, dL, theta, phi, iota, psi, tcoal, Phicoal, chiS, chiA, chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, ecc, rot=rot, is_m1m2=use_m1m2, is_chi1chi2=use_chi1chi2, is_prec_ang=use_prec_ang))
+                    #GWstrainUse_imag = lambda f, Mc, eta, dL, theta, phi, iota, psi, tcoal, Phicoal, chiS, chiA, chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, ecc: np.imag(self.GWstrain(f, Mc, eta, dL, theta, phi, iota, psi, tcoal, Phicoal, chiS, chiA, chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, ecc, rot=rot, is_m1m2=use_m1m2, is_chi1chi2=use_chi1chi2, is_prec_ang=use_prec_ang))
+                    
+                    #realDerivs = np.asarray(vmap(jacrev(GWstrainUse_real, argnums=derivargs))(np.real(fgrids).T, np.real(Mc), np.real(eta), np.real(dL), np.real(theta), np.real(phi), np.real(iota), np.real(psi), np.real(tcoal), np.real(Phicoal), np.real(chiS), np.real(chiA), np.real(chi1x), np.real(chi2x), np.real(chi1y), np.real(chi2y), np.real(LambdaTilde), np.real(deltaLambda), np.real(ecc)))
+                    #imagDerivs = np.asarray(vmap(jacrev(GWstrainUse_imag, argnums=derivargs))(np.real(fgrids).T, np.real(Mc), np.real(eta), np.real(dL), np.real(theta), np.real(phi), np.real(iota), np.real(psi), np.real(tcoal), np.real(Phicoal), np.real(chiS), np.real(chiA), np.real(chi1x), np.real(chi2x), np.real(chi1y), np.real(chi2y), np.real(LambdaTilde), np.real(deltaLambda), np.real(ecc)))
         else:
             if self.wf_model.is_newtonian:
                 if computeAnalyticalDeriv:
@@ -1360,56 +1625,135 @@ class GWSignal(object):
                 else:
                     if not self.wf_model.is_eccentric:
                         if not computeAnalyticalDeriv:
-                            if hasattr(self.wf_model, 'devPN') and self.wf_model.devPN is not None:
+                            ### QUA ??
+                            if devPN_val == 1:
                                 GWstrainUse = lambda pars: self.GWstrain(fgrids, pars[0], pars[1], pars[2], pars[3], pars[4], pars[5], pars[6], pars[7], pars[8], pars[9], pars[10], chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, ecc, pars[11], rot=rot, is_m1m2=use_m1m2, is_chi1chi2=use_chi1chi2)
-                                evpars = [Mc, eta, dL, theta, phi, iota, psi, tcoal, Phicoal, chiS, chiA, deltaPN]
+                                pars = [Mc, eta, dL, theta, phi, iota, psi, tcoal, Phicoal, chiS, chiA, phi_map[self.wf_model.orderPN[0]]]
+                                
+                            elif devPN_val == 2:
+                                GWstrainUse = lambda pars: self.GWstrain(fgrids, pars[0], pars[1], pars[2], pars[3], pars[4], pars[5], pars[6], pars[7], pars[8], pars[9], pars[10], chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, ecc, pars[11], pars[12], rot=rot, is_m1m2=use_m1m2, is_chi1chi2=use_chi1chi2)
+                                pars = [Mc, eta, dL, theta, phi, iota, psi, tcoal, Phicoal, chiS, chiA, phi_map[self.wf_model.orderPN[0]], phi_map[self.wf_model.orderPN[1]]]
+                            
+                            elif devPN_val == 5:
+                                GWstrainUse = lambda pars: self.GWstrain(fgrids, pars[0], pars[1], pars[2], pars[3], pars[4], pars[5], pars[6], pars[7], pars[8], pars[9], pars[10], chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, ecc, pars[11], pars[12], pars[13], pars[14], pars[15], rot=rot, is_m1m2=use_m1m2, is_chi1chi2=use_chi1chi2)
+                                pars = [Mc, eta, dL, theta, phi, iota, psi, tcoal, Phicoal, chiS, chiA, phi_map[self.wf_model.orderPN[0]], phi_map[self.wf_model.orderPN[1]], phi_map[self.wf_model.orderPN[2]], phi_map[self.wf_model.orderPN[3]], phi_map[self.wf_model.orderPN[4]]]
+
+                            elif devPN_val == 7:
+                                GWstrainUse = lambda pars: self.GWstrain(fgrids, pars[0], pars[1], pars[2], pars[3], pars[4], pars[5], pars[6], pars[7], pars[8], pars[9], pars[10], chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, ecc, pars[11], pars[12], pars[13], pars[14], pars[15], pars[16], pars[17], rot=rot, is_m1m2=use_m1m2, is_chi1chi2=use_chi1chi2)
+                                pars = [Mc, eta, dL, theta, phi, iota, psi, tcoal, Phicoal, chiS, chiA, phi_map[self.wf_model.orderPN[0]], phi_map[self.wf_model.orderPN[1]], phi_map[self.wf_model.orderPN[2]], phi_map[self.wf_model.orderPN[3]], phi_map[self.wf_model.orderPN[4]], phi_map[self.wf_model.orderPN[5]], phi_map[self.wf_model.orderPN[6]]]
+                            
                             else:
                                 GWstrainUse = lambda pars: self.GWstrain(fgrids, pars[0], pars[1], pars[2], pars[3], pars[4], pars[5], pars[6], pars[7], pars[8], pars[9], pars[10], chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, ecc, rot=rot, is_m1m2=use_m1m2, is_chi1chi2=use_chi1chi2)
-                                evpars = [Mc, eta, dL, theta, phi, iota, psi, tcoal, Phicoal, chiS, chiA]
-                                
+                                pars = [Mc, eta, dL, theta, phi, iota, psi, tcoal, Phicoal, chiS, chiA]
+    
                         else:
                             if not self.wf_model.is_HigherModes:
-                                if hasattr(self.wf_model, 'devPN') and self.wf_model.devPN is not None:
+                                if devPN_val == 1:
                                     GWstrainUse = lambda pars: self.GWstrain(fgrids, pars[0], pars[1], dL, theta, phi, iota, psi, tcoal, Phicoal, pars[2], pars[3], chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, ecc, pars[4], rot=rot, is_m1m2=use_m1m2, is_chi1chi2=use_chi1chi2)
-                                    evpars = [Mc, eta, chiS, chiA, deltaPN]
+                                    pars = [Mc, eta, chiS, chiA, phi_map[self.wf_model.orderPN[0]]]
+                                
+                                elif devPN_val == 2:
+                                    GWstrainUse = lambda pars: self.GWstrain(fgrids, pars[0], pars[1], dL, theta, phi, iota, psi, tcoal, Phicoal, pars[2], pars[3], chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, ecc, pars[4], pars[5], rot=rot, is_m1m2=use_m1m2, is_chi1chi2=use_chi1chi2)
+                                    pars = [Mc, eta, chiS, chiA, phi_map[self.wf_model.orderPN[0]], phi_map[self.wf_model.orderPN[1]]]
+                                
+                                elif devPN_val == 5:
+                                    GWstrainUse = lambda pars: self.GWstrain(fgrids, pars[0], pars[1], dL, theta, phi, iota, psi, tcoal, Phicoal, pars[2], pars[3], chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, ecc, pars[4], pars[5], pars[6], pars[7], pars[8], rot=rot, is_m1m2=use_m1m2, is_chi1chi2=use_chi1chi2)
+                                    pars = [Mc, eta, chiS, chiA, phi_map[self.wf_model.orderPN[0]], phi_map[self.wf_model.orderPN[1]], phi_map[self.wf_model.orderPN[2]], phi_map[self.wf_model.orderPN[3]], phi_map[self.wf_model.orderPN[4]]]
+
+                                elif devPN_val == 7:
+                                    GWstrainUse = lambda pars: self.GWstrain(fgrids, pars[0], pars[1], dL, theta, phi, iota, psi, tcoal, Phicoal, pars[2], pars[3], chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, ecc, pars[4], pars[5], pars[6], pars[7], pars[8], pars[9], pars[10], rot=rot, is_m1m2=use_m1m2, is_chi1chi2=use_chi1chi2)
+                                    pars = [Mc, eta, chiS, chiA, phi_map[self.wf_model.orderPN[0]], phi_map[self.wf_model.orderPN[1]], phi_map[self.wf_model.orderPN[2]], phi_map[self.wf_model.orderPN[3]], phi_map[self.wf_model.orderPN[4]], phi_map[self.wf_model.orderPN[5]], phi_map[self.wf_model.orderPN[6]]]
+                                
                                 else:
                                     GWstrainUse = lambda pars: self.GWstrain(fgrids, pars[0], pars[1], dL, theta, phi, iota, psi, tcoal, Phicoal, pars[2], pars[3], chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, ecc, rot=rot, is_m1m2=use_m1m2, is_chi1chi2=use_chi1chi2)
-                                    evpars = [Mc, eta, chiS, chiA]
+                                    pars = [Mc, eta, chiS, chiA]
                                     
                             else:
-                                if hasattr(self.wf_model, 'devPN') and self.wf_model.devPN is not None:
+                                if devPN_val == 1:
                                     GWstrainUse = lambda pars: self.GWstrain(fgrids, pars[0], pars[1], dL, theta, phi, pars[2], psi, tcoal, Phicoal, pars[3], pars[4], chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, ecc, pars[5], rot=rot, is_m1m2=use_m1m2, is_chi1chi2=use_chi1chi2)
-                                    evpars = [Mc, eta, iota, chiS, chiA, deltaPN]
+                                    pars = [Mc, eta, iota, chiS, chiA, phi_map[self.wf_model.orderPN[0]]]
+                                
+                                elif devPN_val == 2:
+                                    GWstrainUse = lambda pars: self.GWstrain(fgrids, pars[0], pars[1], dL, theta, phi, pars[2], psi, tcoal, Phicoal, pars[3], pars[4], chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, ecc, pars[5], pars[6], rot=rot, is_m1m2=use_m1m2, is_chi1chi2=use_chi1chi2)
+                                    pars = [Mc, eta, iota, chiS, chiA, phi_map[self.wf_model.orderPN[0]], phi_map[self.wf_model.orderPN[1]]]
+                                
+                                elif devPN_val == 5:
+                                    GWstrainUse = lambda pars: self.GWstrain(fgrids, pars[0], pars[1], dL, theta, phi, pars[2], psi, tcoal, Phicoal, pars[3], pars[4], chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, ecc, pars[5], pars[6], pars[7], pars[8], pars[9], rot=rot, is_m1m2=use_m1m2, is_chi1chi2=use_chi1chi2)
+                                    pars = [Mc, eta, iota, chiS, chiA, phi_map[self.wf_model.orderPN[0]], phi_map[self.wf_model.orderPN[1]], phi_map[self.wf_model.orderPN[2]], phi_map[self.wf_model.orderPN[3]], phi_map[self.wf_model.orderPN[4]]]
+
+                                elif devPN_val == 7:
+                                    GWstrainUse = lambda pars: self.GWstrain(fgrids, pars[0], pars[1], dL, theta, phi, pars[2], psi, tcoal, Phicoal, pars[3], pars[4], chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, ecc, pars[5], pars[6], pars[7], pars[8], pars[9], pars[10], pars[11], rot=rot, is_m1m2=use_m1m2, is_chi1chi2=use_chi1chi2)
+                                    pars = [Mc, eta, iota, chiS, chiA, phi_map[self.wf_model.orderPN[0]], phi_map[self.wf_model.orderPN[1]], phi_map[self.wf_model.orderPN[2]], phi_map[self.wf_model.orderPN[3]], phi_map[self.wf_model.orderPN[4]], phi_map[self.wf_model.orderPN[5]], phi_map[self.wf_model.orderPN[6]]]
+                                
                                 else:
                                     GWstrainUse = lambda pars: self.GWstrain(fgrids, pars[0], pars[1], dL, theta, phi, pars[2], psi, tcoal, Phicoal, pars[3], pars[4], chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, ecc, rot=rot, is_m1m2=use_m1m2, is_chi1chi2=use_chi1chi2)
-                                    evpars = [Mc, eta, iota, chiS, chiA]
+                                    pars = [Mc, eta, iota, chiS, chiA]
+                                    
                     else:
                         if not computeAnalyticalDeriv:
-                            if hasattr(self.wf_model, 'devPN') and self.wf_model.devPN is not None:
+                            if devPN_val == 1:
                                 GWstrainUse = lambda pars: self.GWstrain(fgrids, pars[0], pars[1], pars[2], pars[3], pars[4], pars[5], pars[6], pars[7], pars[8], pars[9], pars[10], chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, pars[11], pars[12], rot=rot, is_m1m2=use_m1m2, is_chi1chi2=use_chi1chi2)
-                                evpars = [Mc, eta, dL, theta, phi, iota, psi, tcoal, Phicoal, chiS, chiA, ecc, deltaPN]
+                                pars = [Mc, eta, dL, theta, phi, iota, psi, tcoal, Phicoal, chiS, chiA, ecc, phi_map[self.wf_model.orderPN[0]]]
+                            
+                            elif devPN_val == 2:
+                                GWstrainUse = lambda pars: self.GWstrain(fgrids, pars[0], pars[1], pars[2], pars[3], pars[4], pars[5], pars[6], pars[7], pars[8], pars[9], pars[10], chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, pars[11], pars[12], pars[13], rot=rot, is_m1m2=use_m1m2, is_chi1chi2=use_chi1chi2)
+                                pars = [Mc, eta, dL, theta, phi, iota, psi, tcoal, Phicoal, chiS, chiA, ecc, phi_map[self.wf_model.orderPN[0]], phi_map[self.wf_model.orderPN[1]]]
+                            
+                            elif devPN_val == 5:
+                                GWstrainUse = lambda pars: self.GWstrain(fgrids, pars[0], pars[1], pars[2], pars[3], pars[4], pars[5], pars[6], pars[7], pars[8], pars[9], pars[10], chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, pars[11], pars[12], pars[13], pars[14], pars[15], pars[16], rot=rot, is_m1m2=use_m1m2, is_chi1chi2=use_chi1chi2)
+                                pars = [Mc, eta, dL, theta, phi, iota, psi, tcoal, Phicoal, chiS, chiA, ecc, phi_map[self.wf_model.orderPN[0]], phi_map[self.wf_model.orderPN[1]], phi_map[self.wf_model.orderPN[2]], phi_map[self.wf_model.orderPN[3]], phi_map[self.wf_model.orderPN[4]]]
+
+                            elif devPN_val == 7:
+                                GWstrainUse = lambda pars: self.GWstrain(fgrids, pars[0], pars[1], pars[2], pars[3], pars[4], pars[5], pars[6], pars[7], pars[8], pars[9], pars[10], chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, pars[11], pars[12], pars[13], pars[14], pars[15], pars[16], pars[17], pars[18], rot=rot, is_m1m2=use_m1m2, is_chi1chi2=use_chi1chi2)
+                                pars = [Mc, eta, dL, theta, phi, iota, psi, tcoal, Phicoal, chiS, chiA, ecc, phi_map[self.wf_model.orderPN[0]], phi_map[self.wf_model.orderPN[1]], phi_map[self.wf_model.orderPN[2]], phi_map[self.wf_model.orderPN[3]], phi_map[self.wf_model.orderPN[4]], phi_map[self.wf_model.orderPN[5]], phi_map[self.wf_model.orderPN[6]]]
+                            
                             else:
                                 GWstrainUse = lambda pars: self.GWstrain(fgrids, pars[0], pars[1], pars[2], pars[3], pars[4], pars[5], pars[6], pars[7], pars[8], pars[9], pars[10], chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, pars[11], rot=rot, is_m1m2=use_m1m2, is_chi1chi2=use_chi1chi2)
-                                evpars = [Mc, eta, dL, theta, phi, iota, psi, tcoal, Phicoal, chiS, chiA, ecc]
-                                
+                                pars = [Mc, eta, dL, theta, phi, iota, psi, tcoal, Phicoal, chiS, chiA, ecc]
                         else:
                             if not self.wf_model.is_HigherModes:
-                                if hasattr(self.wf_model, 'devPN') and self.wf_model.devPN is not None:
+                                if devPN_val == 1:
                                     GWstrainUse = lambda pars: self.GWstrain(fgrids, pars[0], pars[1], dL, theta, phi, iota, psi, tcoal, Phicoal, pars[2], pars[3], chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, pars[4], pars[5], rot=rot, is_m1m2=use_m1m2, is_chi1chi2=use_chi1chi2)
-                                    evpars = [Mc, eta, chiS, chiA, ecc, deltaPN]
+                                    pars = [Mc, eta, chiS, chiA, ecc, phi_map[self.wf_model.orderPN[0]]]
+                                
+                                elif devPN_val == 2:
+                                    GWstrainUse = lambda pars: self.GWstrain(fgrids, pars[0], pars[1], dL, theta, phi, iota, psi, tcoal, Phicoal, pars[2], pars[3], chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, pars[4], pars[5], pars[6], rot=rot, is_m1m2=use_m1m2, is_chi1chi2=use_chi1chi2)
+                                    pars = [Mc, eta, chiS, chiA, ecc, phi_map[self.wf_model.orderPN[0]], phi_map[self.wf_model.orderPN[1]]]
+                                
+                                elif devPN_val == 5:
+                                    GWstrainUse = lambda pars: self.GWstrain(fgrids, pars[0], pars[1], dL, theta, phi, iota, psi, tcoal, Phicoal, pars[2], pars[3], chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, pars[4], pars[5], pars[6], pars[7], pars[8], pars[9], rot=rot, is_m1m2=use_m1m2, is_chi1chi2=use_chi1chi2)
+                                    pars = [Mc, eta, chiS, chiA, ecc, phi_map[self.wf_model.orderPN[0]], phi_map[self.wf_model.orderPN[1]], phi_map[self.wf_model.orderPN[2]], phi_map[self.wf_model.orderPN[3]], phi_map[self.wf_model.orderPN[4]]]
+
+                                elif devPN_val == 7:
+                                    GWstrainUse = lambda pars: self.GWstrain(fgrids, pars[0], pars[1], dL, theta, phi, iota, psi, tcoal, Phicoal, pars[2], pars[3], chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, pars[4], pars[5], pars[6], pars[7], pars[8], pars[9], pars[10], pars[11], rot=rot, is_m1m2=use_m1m2, is_chi1chi2=use_chi1chi2)
+                                    pars = [Mc, eta, chiS, chiA, ecc, phi_map[self.wf_model.orderPN[0]], phi_map[self.wf_model.orderPN[1]], phi_map[self.wf_model.orderPN[2]], phi_map[self.wf_model.orderPN[3]], phi_map[self.wf_model.orderPN[4]], phi_map[self.wf_model.orderPN[5]], phi_map[self.wf_model.orderPN[6]]]
+
+                                
                                 else:
                                     GWstrainUse = lambda pars: self.GWstrain(fgrids, pars[0], pars[1], dL, theta, phi, iota, psi, tcoal, Phicoal, pars[2], pars[3], chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, pars[4], rot=rot, is_m1m2=use_m1m2, is_chi1chi2=use_chi1chi2)
-                                    evpars = [Mc, eta, chiS, chiA, ecc]
+                                    pars = [Mc, eta, chiS, chiA, ecc]
                                     
                             else:
-                                if hasattr(self.wf_model, 'devPN') and self.wf_model.devPN is not None:
+                                if devPN_val == 1:
                                     GWstrainUse = lambda pars: self.GWstrain(fgrids, pars[0], pars[1], dL, theta, phi, pars[2], psi, tcoal, Phicoal, pars[3], pars[4], chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, pars[5], pars[6], rot=rot, is_m1m2=use_m1m2, is_chi1chi2=use_chi1chi2)
-                                    evpars = [Mc, eta, iota, chiS, chiA, ecc, deltaPN]
+                                    pars = [Mc, eta, iota, chiS, chiA, ecc, phi_map[self.wf_model.orderPN[0]]]
+                                
+                                elif devPN_val == 2:
+                                    GWstrainUse = lambda pars: self.GWstrain(fgrids, pars[0], pars[1], dL, theta, phi, pars[2], psi, tcoal, Phicoal, pars[3], pars[4], chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, pars[5], pars[6], pars[7], rot=rot, is_m1m2=use_m1m2, is_chi1chi2=use_chi1chi2)
+                                    pars = [Mc, eta, iota, chiS, chiA, ecc, phi_map[self.wf_model.orderPN[0]], phi_map[self.wf_model.orderPN[1]]]
+                                
+                                elif devPN_val == 5:
+                                    GWstrainUse = lambda pars: self.GWstrain(fgrids, pars[0], pars[1], dL, theta, phi, pars[2], psi, tcoal, Phicoal, pars[3], pars[4], chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, pars[5], pars[6], pars[7], pars[8], pars[9], pars[10], rot=rot, is_m1m2=use_m1m2, is_chi1chi2=use_chi1chi2)
+                                    pars = [Mc, eta, iota, chiS, chiA, ecc, phi_map[self.wf_model.orderPN[0]], phi_map[self.wf_model.orderPN[1]], phi_map[self.wf_model.orderPN[2]], phi_map[self.wf_model.orderPN[3]], phi_map[self.wf_model.orderPN[4]]]
+
+                                elif devPN_val == 7:
+                                    GWstrainUse = lambda pars: self.GWstrain(fgrids, pars[0], pars[1], dL, theta, phi, pars[2], psi, tcoal, Phicoal, pars[3], pars[4], chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, pars[5], pars[6], pars[7], pars[8], pars[9], pars[10], pars[11], pars[12], rot=rot, is_m1m2=use_m1m2, is_chi1chi2=use_chi1chi2)
+                                    pars = [Mc, eta, iota, chiS, chiA, ecc, phi_map[self.wf_model.orderPN[0]], phi_map[self.wf_model.orderPN[1]], phi_map[self.wf_model.orderPN[2]], phi_map[self.wf_model.orderPN[3]], phi_map[self.wf_model.orderPN[4]], phi_map[self.wf_model.orderPN[5]], phi_map[self.wf_model.orderPN[6]]]
+                                
                                 else:
                                     GWstrainUse = lambda pars: self.GWstrain(fgrids, pars[0], pars[1], dL, theta, phi, pars[2], psi, tcoal, Phicoal, pars[3], pars[4], chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, pars[5], rot=rot, is_m1m2=use_m1m2, is_chi1chi2=use_chi1chi2)
-                                    evpars = [Mc, eta, iota, chiS, chiA, ecc]
-                                    
-                                
+                                    pars = [Mc, eta, iota, chiS, chiA, ecc]
+
             dh = ndt.Jacobian(GWstrainUse, step=stepNDT, method=methodNDT, order=2, n=1)
             FisherDerivs = np.asarray(dh(evpars))
 
@@ -1424,11 +1768,26 @@ class GWSignal(object):
                 NAnalyticalDerivs = 7
             else:
                 NAnalyticalDerivs = 6
-            if hasattr(self.wf_model, 'devPN') and self.wf_model.devPN is not None:
-                
-                dL_deriv, theta_deriv, phi_deriv, iota_deriv, psi_deriv, tc_deriv, Phicoal_deriv = self._AnalyticalDerivatives(fgrids, Mc, eta, dL, theta, phi, iota, psi, tcoal, Phicoal, chiS, chiA, chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, ecc, deltaPN, rot=rot, use_m1m2=use_m1m2, use_chi1chi2=use_chi1chi2, use_prec_ang=use_prec_ang)
+
+            if devPN_val == 1:
+                Phis = [phi_map[i] for i in self.wf_model.orderPN]
+                dL_deriv, theta_deriv, phi_deriv, iota_deriv, psi_deriv, tc_deriv, Phicoal_deriv = self._AnalyticalDerivatives(f=fgrids, Mc=Mc, eta=eta, dL=dL, theta=theta, phi=phi, iota=iota, psi=psi, tcoal=tcoal, Phicoal=Phicoal, chiS=chiS, chiA=chiA, chi1x=chi1x, chi2x=chi2x, chi1y=chi1y, chi2y=chi2y, LambdaTilde=LambdaTilde, deltaLambda=deltaLambda, ecc=ecc, **{f'Phi_{self.wf_model.orderPN[0]}': Phis[0]}, rot=rot, use_m1m2=use_m1m2, use_chi1chi2=use_chi1chi2, use_prec_ang=use_prec_ang)
+            
+            elif devPN_val == 2:
+                Phis = [phi_map[i] for i in self.wf_model.orderPN]
+                dL_deriv, theta_deriv, phi_deriv, iota_deriv, psi_deriv, tc_deriv, Phicoal_deriv = self._AnalyticalDerivatives(f=fgrids, Mc=Mc, eta=eta, dL=dL, theta=theta, phi=phi, iota=iota, psi=psi, tcoal=tcoal, Phicoal=Phicoal, chiS=chiS, chiA=chiA, chi1x=chi1x, chi2x=chi2x, chi1y=chi1y, chi2y=chi2y, LambdaTilde=LambdaTilde, deltaLambda=deltaLambda, ecc=ecc, **{f'Phi_{self.wf_model.orderPN[0]}': Phis[0]}, **{f'Phi_{self.wf_model.orderPN[1]}': Phis[1]}, rot=rot, use_m1m2=use_m1m2, use_chi1chi2=use_chi1chi2, use_prec_ang=use_prec_ang)
+            
+            elif devPN_val == 5:
+                Phis = [phi_map[i] for i in self.wf_model.orderPN]
+                dL_deriv, theta_deriv, phi_deriv, iota_deriv, psi_deriv, tc_deriv, Phicoal_deriv = self._AnalyticalDerivatives(f=fgrids, Mc=Mc, eta=eta, dL=dL, theta=theta, phi=phi, iota=iota, psi=psi, tcoal=tcoal, Phicoal=Phicoal, chiS=chiS, chiA=chiA, chi1x=chi1x, chi2x=chi2x, chi1y=chi1y, chi2y=chi2y, LambdaTilde=LambdaTilde, deltaLambda=deltaLambda, ecc=ecc, **{f'Phi_{self.wf_model.orderPN[0]}': Phis[0]}, **{f'Phi_{self.wf_model.orderPN[1]}': Phis[1]}, **{f'Phi_{self.wf_model.orderPN[2]}': Phis[2]}, **{f'Phi_{self.wf_model.orderPN[3]}': Phis[3]}, **{f'Phi_{self.wf_model.orderPN[4]}': Phis[4]}, rot=rot, use_m1m2=use_m1m2, use_chi1chi2=use_chi1chi2, use_prec_ang=use_prec_ang)
+
+            elif devPN_val == 7:
+                Phis = [phi_map[i] for i in self.wf_model.orderPN]
+                dL_deriv, theta_deriv, phi_deriv, iota_deriv, psi_deriv, tc_deriv, Phicoal_deriv = self._AnalyticalDerivatives(f=fgrids, Mc=Mc, eta=eta, dL=dL, theta=theta, phi=phi, iota=iota, psi=psi, tcoal=tcoal, Phicoal=Phicoal, chiS=chiS, chiA=chiA, chi1x=chi1x, chi2x=chi2x, chi1y=chi1y, chi2y=chi2y, LambdaTilde=LambdaTilde, deltaLambda=deltaLambda, ecc=ecc, **{f'Phi_{self.wf_model.orderPN[0]}': Phis[0]}, **{f'Phi_{self.wf_model.orderPN[1]}': Phis[1]}, **{f'Phi_{self.wf_model.orderPN[2]}': Phis[2]}, **{f'Phi_{self.wf_model.orderPN[3]}': Phis[3]}, **{f'Phi_{self.wf_model.orderPN[4]}': Phis[4]}, **{f'Phi_{self.wf_model.orderPN[5]}': Phis[5]}, **{f'Phi_{self.wf_model.orderPN[6]}': Phis[6]}, rot=rot, use_m1m2=use_m1m2, use_chi1chi2=use_chi1chi2, use_prec_ang=use_prec_ang)
+            
             else:
-                dL_deriv, theta_deriv, phi_deriv, iota_deriv, psi_deriv, tc_deriv, Phicoal_deriv = self._AnalyticalDerivatives(fgrids, Mc, eta, dL, theta, phi, iota, psi, tcoal, Phicoal, chiS, chiA, chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, ecc, rot=rot, use_m1m2=use_m1m2, use_chi1chi2=use_chi1chi2, use_prec_ang=use_prec_ang)
+                dL_deriv, theta_deriv, phi_deriv, iota_deriv, psi_deriv, tc_deriv, Phicoal_deriv = self._AnalyticalDerivatives(f=fgrids, Mc=Mc, eta=eta, dL=dL, theta=theta, phi=phi, iota=iota, psi=psi, tcoal=tcoal, Phicoal=Phicoal, chiS=chiS, chiA=chiA, chi1x=chi1x, chi2x=chi2x, chi1y=chi1y, chi2y=chi2y, LambdaTilde=LambdaTilde, deltaLambda=deltaLambda, ecc=ecc, rot=rot, use_m1m2=use_m1m2, use_chi1chi2=use_chi1chi2, use_prec_ang=use_prec_ang)
+
                 
             if (not self.wf_model.is_HigherModes) and (not self.wf_model.is_Precessing):
                 if not self.wf_model.is_newtonian:
@@ -1442,8 +1801,9 @@ class GWSignal(object):
         
         return FisherDerivs
         
-    def _AnalyticalDerivatives(self, f, Mc, eta, dL, theta, phi, iota, psi, tcoal, Phicoal, chiS, chiA, chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, ecc, deltaPN=None, rot=0., use_m1m2=False, use_chi1chi2=False, use_prec_ang=False):
-###OFF        def _AnalyticalDerivatives(self, f, Mc, eta, dL, theta, phi, iota, psi, tcoal, Phicoal, chiS, chiA, chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, ecc, rot=0., use_m1m2=False, use_chi1chi2=False, use_prec_ang=False):
+    def _AnalyticalDerivatives(self, f, Mc, eta, dL, theta, phi, iota, psi, tcoal, Phicoal, chiS, chiA, chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, ecc, Phi_0=None, Phi_1=None, Phi_2=None, Phi_3=None, Phi_4=None, Phi_5=None, Phi_6=None, Phi_7=None, rot=0., use_m1m2=False, use_chi1chi2=False, use_prec_ang=False, **kwargs):
+        
+#OLD    def _AnalyticalDerivatives(self, f, Mc, eta, dL, theta, phi, iota, psi, tcoal, Phicoal, chiS, chiA, chi1x, chi2x, chi1y, chi2y, LambdaTilde, deltaLambda, ecc, deltaPN=None, rot=0., use_m1m2=False, use_chi1chi2=False, use_prec_ang=False):
         """
         Compute analytical derivatives with respect to ``dL``, ``theta``, ``phi``, ``psi``, ``tcoal``, ``Phicoal`` and ``iota`` (the latter only for the fundamental mode in the non-precessing case).
         
@@ -1505,8 +1865,22 @@ class GWSignal(object):
                 
         evParams = {'Mc':McUse, 'dL':dL, 'theta':theta, 'phi':phi, 'iota':iota, 'psi':psi, 'tcoal':tcoal, 'eta':etaUse, 'Phicoal':Phicoal, 'chi1z':chi1z, 'chi2z':chi2z, 'chi1x':chi1xUse, 'chi2x':chi2xUse, 'chi1y':chi1yUse, 'chi2y':chi2yUse}
 
-        if hasattr(self.wf_model, 'devPN') and self.wf_model.devPN is not None:
-            evParams['deltaPN'] = deltaPN
+#OLD        if hasattr(self.wf_model, 'devPN') and self.wf_model.devPN is not None:
+#OLD            evParams['deltaPN'] = deltaPN
+            
+        if hasattr(self.wf_model, 'devPN') and self.wf_model.devPN > 0:
+            phi_map = {0: Phi_0, 1: Phi_1, 2: Phi_2, 3: Phi_3, 4: Phi_4, 5: Phi_5, 6: Phi_6, 7: Phi_7}
+            
+            if isinstance(self.wf_model.orderPN, int):
+                active_orders = [self.wf_model.orderPN]
+            else:
+                active_orders = self.wf_model.orderPN
+            for order in active_orders:
+                param_name = f'Phi_{order}'
+                value = phi_map.get(order)
+                if value is None:
+                    value = 0.0 #Default is 0.
+                evParams[param_name] = value
             
         
         if self.wf_model.is_tidal:
@@ -1775,8 +2149,7 @@ class GWSignal(object):
         Mc, dL, theta, phi, iota, psi, tcoal, eta = evParams['Mc'], evParams['dL'], evParams['theta'], evParams['phi'], evParams['iota'], evParams['psi'], evParams['tcoal'], evParams['eta'] 
         
         ras, decs = self._ra_dec_from_th_phi(theta, phi)
-        
-        
+
         if not np.isscalar(Mc):
             SNR = np.zeros(Mc.shape)
         else:

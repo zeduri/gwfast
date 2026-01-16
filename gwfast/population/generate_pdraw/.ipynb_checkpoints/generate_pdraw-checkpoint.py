@@ -21,6 +21,9 @@ import numpy as np
 ##########################################################################
 
 class Observations(object):
+    """
+    Class to generate the desired population of events.
+    """
     def __init__(self,
                  population_model_inj, 
                  N_goal, 
@@ -50,6 +53,9 @@ class Observations(object):
         
 
     def generate_network(self):
+        '''
+        Generate the network of detectors with the desired PSDs and parameters.
+        '''
         #fmin        = 10. if self.fmin is None else fmin
         #fmax        = 1024. if self.fmax is None else fmax
         alldetectors = copy.deepcopy(gwfast.gwfastGlobals.detectors)
@@ -82,6 +88,10 @@ class Observations(object):
     def generate_events_parallel_snr_th(self, network):
         '''
         Generate catalog with N_goal events having SNR>snr_th
+        :param network: Network of detectors.   
+
+        :return: Samples extracted from the desired population model.
+        :rtype: dictionary
         '''
         total_events = 0
         events_over_th = 0
@@ -101,10 +111,13 @@ class Observations(object):
     
             in_time = time.time()
 
-            snr = tqdm_pathos.map(network.SNR_netFast, data_new, n_cpus=self.CPUs)
+            snr = tqdm_pathos.map(network.SNR, data_new, n_cpus=self.CPUs)
             print('\nDone. Total execution time: %.2fs' % (time.time() - in_time))
             snr = np.array(snr)
             theta_samples['snr']=snr
+            mask = snr > self.snr_th
+            for key in theta_samples.keys():
+                theta_samples[key] = theta_samples[key][mask]
             # Save all theta_samples
             save_theta_samples.append(theta_samples)
             
@@ -114,10 +127,17 @@ class Observations(object):
             
             print(f"Total number of generated events: {total_events}")
             print(f"Events with SNR> {self.snr_th}: {events_over_th}")
+            
         result=save_theta_samples
         arrays_dict = {}
         for key in result[0].keys():
             arrays_dict[key] = np.concatenate([d[key] for d in result])
+
+        snr_filtered = arrays_dict['snr']
+        with open("snr_filtered.txt", "w") as f:
+            for val in snr_filtered:
+                f.write(f"{val}\n")
+
         return arrays_dict
 
 
@@ -127,8 +147,9 @@ class Observations(object):
     def generate_events_parallel(self, network):
         '''
         Generate catalog with N_goal events
+        :param network: Network of detectors.
         
-        :return: Samples extracted from the desired PDF.
+        :return: Samples extracted from the desired population model.
         :rtype: dictionary
         '''
         total_events = 0
@@ -169,6 +190,11 @@ class Observations(object):
 
 
 def main():
+    """
+    Main function to generate the population of events.
+    Use the following command to run it:
+    python generate_pdraw.py --config <config_file> --fout <output_folder>
+    """
     
     in_time=time.time()
     parser = argparse.ArgumentParser()
@@ -252,6 +278,7 @@ def main():
     else:
         idxf_gwfast=len(result['Mc'])
     wf_model=repr(config.wf_model)
+    devPN =config.devPN
     lalargs=config.lalargs
     psds=config.psds
     net=config.net
@@ -273,28 +300,121 @@ def main():
         print('Using directory %s for output' %fout_gwfast)
 
 
-
-    with open(out_path+'/scripts.txt', 'w') as file:
-        file.write(f'Script to run gwfast:\n')
-    with open(out_path+'/scripts.txt', 'a') as file:
-        script_line = f'python3 calculate_forecasts_from_catalog.py --fname_obs={fname_obs} --fout={fout_gwfast} --wf_model={wf_model} --lalargs {lalargs} --snr_th={snr_th_FIM} --batch_size={config.batch_size_gwfast} --npools={config.npools_gwfast} --fmin={config.fmin} --idx_in={config.idxin_gwfast} --idx_f={idxf_gwfast} --compute_fisher={config.compute_fisher} --return_snr_derivatives={config.return_snr_derivatives} --return_derivatives={config.return_derivatives} --return_all={config.return_all} --net {net} --psds {psds} --mpi={config.mpi} --duty_factor={config.duty_factor} --concatenate={config.concatenate_gwfast} --rot={config.rot} --use_cogwheel_params={config.use_cogwheel_params} --jit_fisher={config.jit_fisher} --fix_fgrid={config.fix_fgrid} --fix_fgrid_df={config.fix_fgrid_df} --resume_run={config.resume_run} --compute_imrsplit={config.compute_imrsplit}' #--fname_evSNRs={config.fname_evSNRs_gwfast}
-        if config.fmax is not None:
-            script_line += f' --fmax={config.fmax}'
+    # with open(out_path+'/scripts.txt', 'w') as file:
+    #     file.write(f'Script to run gwfast:\n')
+    # with open(out_path+'/scripts.txt', 'a') as file:
+    #     script_line = f'python3 calculate_forecasts_from_catalog.py --fname_obs={fname_obs} --fout={fout_gwfast} --wf_model={wf_model} --lalargs {lalargs} --snr_th={snr_th_FIM} --batch_size={config.batch_size_gwfast} --npools={config.npools_gwfast} --fmin={config.fmin} --idx_in={config.idxin_gwfast} --idx_f={idxf_gwfast} --compute_fisher={config.compute_fisher} --return_snr_derivatives={config.return_snr_derivatives} --return_derivatives={config.return_derivatives} --return_all={config.return_all} --net {net} --psds {psds} --mpi={config.mpi} --duty_factor={config.duty_factor} --concatenate={config.concatenate_gwfast} --rot={config.rot} --resume_run={config.resume_run}'# --use_cogwheel_params={config.use_cogwheel_params} --jit_fisher={config.jit_fisher} --fix_fgrid={config.fix_fgrid} --fix_fgrid_df={config.fix_fgrid_df} --compute_imrsplit={config.compute_imrsplit} #--fname_evSNRs={config.fname_evSNRs_gwfast}
+    #     if config.fmax is not None:
+    #         script_line += f' --fmax={config.fmax}'
             
-        if config.netfile is not None:
-            script_line += f' --netfile={config.netfile}'
+    #     if config.netfile is not None:
+    #         script_line += f' --netfile={config.netfile}'
 
-        if config.params_fix:
-            params_fix=' '.join(config.params_fix)
-            script_line += f' --params_fix {params_fix}'
+    #     if config.params_fix:
+    #         params_fix=' '.join(config.params_fix)
+    #         script_line += f' --params_fix {params_fix}'
             
-        if config.seeds:
-            seeds=' '.join(map(str, config.seeds))
-            script_line += f' --seeds {seeds}'
+    #     if config.seeds:
+    #         seeds=' '.join(map(str, config.seeds))
+    #         script_line += f' --seeds {seeds}'
 
     
-        script_line += '\n'
-        file.write(script_line)
+    #     script_line += '\n'
+    #     file.write(script_line)
+
+
+    sh_path = os.path.join(out_path, 'run_gwfast.sh')
+    with open(sh_path, 'w') as file:
+        file.write('#!/bin/bash\n\n')
+        file.write('# Auto-generated script to run gwfast\n\n')
+    
+        # === Variabili di configurazione ===
+        file.write(f'fname_obs="{fname_obs}"\n')
+        file.write(f'fout="{fout_gwfast}"\n')
+        file.write(f'wf_model="{wf_model}"\n')
+        file.write(f'devPN={config.waveform.devPN}\n')
+        file.write(f"lalargs={lalargs}\n")
+        file.write(f"net={net}\n")
+        file.write(f"psds={psds}\n")
+        file.write(f"snr_th={snr_th}\n")
+        file.write(f"snr_th_FIM={snr_th_FIM}\n")
+        file.write(f"batch_size={config.batch_size_gwfast}\n")
+        file.write(f"npools={config.npools_gwfast}\n")
+        file.write(f"fmin={config.fmin}\n")
+        file.write(f"idx_in={config.idxin_gwfast}\n")
+        file.write(f"idx_f={idxf_gwfast}\n")
+        file.write(f"compute_fisher={config.compute_fisher}\n")
+        file.write(f"return_snr_derivatives={config.return_snr_derivatives}\n")
+        file.write(f"return_derivatives={config.return_derivatives}\n")
+        file.write(f"return_all={config.return_all}\n")
+        file.write(f"mpi={config.mpi}\n")
+        file.write(f"duty_factor={config.duty_factor}\n")
+        file.write(f"concatenate={config.concatenate_gwfast}\n")
+        file.write(f"rot={config.rot}\n")
+        #file.write(f"use_cogwheel_params={config.use_cogwheel_params}\n")
+        #file.write(f"jit_fisher={config.jit_fisher}\n")
+        #file.write(f"fix_fgrid={config.fix_fgrid}\n")
+        #file.write(f"fix_fgrid_df={config.fix_fgrid_df}\n")
+        file.write(f"resume_run={config.resume_run}\n")
+        #file.write(f"compute_imrsplit={config.compute_imrsplit}\n")
+    
+        if config.fmax is not None:
+            file.write(f"fmax={config.fmax}\n")
+        if config.netfile is not None:
+            file.write(f"netfile={config.netfile}\n")
+        if config.params_fix:
+            params_fix = ' '.join(config.params_fix)
+            file.write(f"params_fix='{params_fix}'\n")
+        if config.seeds:
+            seeds = ' '.join(map(str, config.seeds))
+            file.write(f"seeds='{seeds}'\n")
+    
+        # === Exe commands ===
+        file.write(f'\n\ncd {PARENT_DIR}/run\n\n')
+        file.write('\npython3 calculate_forecasts_from_catalog.py \\\n')
+        file.write(f'  --fname_obs={fname_obs} \\\n')
+        file.write(f'  --fout={fout_gwfast} \\\n')
+        file.write(f'  --wf_model={wf_model} \\\n')
+        file.write(f'  --devPN={config.waveform.devPN} \\\n')
+        file.write(f'  --lalargs {lalargs} \\\n')
+        file.write(f'  --snr_th={snr_th_FIM} \\\n')
+        file.write(f'  --batch_size={config.batch_size_gwfast} \\\n')
+        file.write(f'  --npools={config.npools_gwfast} \\\n')
+        file.write(f'  --fmin={config.fmin} \\\n')
+        file.write(f'  --idx_in={config.idxin_gwfast} \\\n')
+        file.write(f'  --idx_f={idxf_gwfast} \\\n')
+        file.write(f'  --compute_fisher={config.compute_fisher} \\\n')
+        file.write(f'  --return_snr_derivatives={config.return_snr_derivatives} \\\n')
+        file.write(f'  --return_derivatives={config.return_derivatives} \\\n')
+        file.write(f'  --return_all={config.return_all} \\\n')
+        file.write(f'  --net {net} \\\n')
+        file.write(f'  --psds {psds} \\\n')
+        file.write(f'  --mpi={config.mpi} \\\n')
+        file.write(f'  --duty_factor={config.duty_factor} \\\n')
+        file.write(f'  --concatenate={config.concatenate_gwfast} \\\n')
+        file.write(f'  --rot={config.rot} \\\n')
+        #file.write(f'  --use_cogwheel_params={config.use_cogwheel_params} \\\n')
+        #file.write(f'  --jit_fisher={config.jit_fisher} \\\n')
+        #file.write(f'  --fix_fgrid={config.fix_fgrid} \\\n')
+        #file.write(f'  --fix_fgrid_df={config.fix_fgrid_df} \\\n')
+        file.write(f'  --resume_run={config.resume_run} \\\n')
+        #file.write(f'  --compute_imrsplit={config.compute_imrsplit} \\\n')
+        
+        if config.fmax is not None:
+            file.write(f'  --fmax={config.fmax} \\\n')
+        if config.netfile is not None:
+            file.write(f'  --netfile={config.netfile} \\\n')
+        if config.params_fix:
+            file.write(f'  --params_fix {params_fix} \\\n')
+        if config.seeds:
+            file.write(f'  --seeds {seeds} \\\n')
+        
+
+        file.seek(file.tell() - 2)
+        file.write('\n')
+
+    os.chmod(sh_path, 0o755)
+
 
 
     #### gwfast.population
@@ -307,6 +427,7 @@ def main():
     mass_model=repr(config.mass_model)
     rate_model=repr(config.rate_model)
     spin_model=repr(config.spin_model)
+    delta_model=repr(config.delta_model)
     POPmodel=repr(config.pop_model_rec)
     fout_popfisher=out_path+'PopFisher'
     fname_evSNRs=fout_gwfast+f'/snrs_{config.idxin_popfisher}_to_{idxf_popfisher}.txt' 
@@ -320,69 +441,71 @@ def main():
     
 
 
-    with open(out_path+'/scripts.txt', 'a') as file:
-        file.write(f'\n\n\n\n Script to run popfisher: \n\n')
-        script_line = f'python3 calculate_hyperpar_derivatives_from_catalog.py --fname_obs={fname_obs} --fname_evSNRs={fname_evSNRs} --fname_evFIMs={fname_evFIMs} --fname_evSNRders={fname_evSNRders} --fout={fout_popfisher} --mass_model={mass_model} --POPmodel={POPmodel}'
+    # with open(out_path+'/scripts.txt', 'a') as file:
+    #     file.write(f'\n\n\n\n Script to run popfisher: \n\n')
+    #     script_line = f'python3 calculate_hyperpar_derivatives_from_catalog.py --fname_obs={fname_obs} --fname_evSNRs={fname_evSNRs} --fname_evFIMs={fname_evFIMs} --fname_evSNRders={fname_evSNRders} --fout={fout_popfisher} --mass_model={mass_model} --POPmodel={POPmodel}'
     
-        if config.mass_model_params_names:
-            mass_model_params_names = ' '.join(config.mass_model_params_names)
-            script_line += f' --mass_model_params_names {mass_model_params_names}'
+    #     if config.mass_model_params_names:
+    #         mass_model_params_names = ' '.join(config.mass_model_params_names)
+    #         script_line += f' --mass_model_params_names {mass_model_params_names}'
     
-        if config.mass_model_params_values:
-            mass_model_params_values = ' '.join(map(str, config.mass_model_params_values))
-            script_line += f' --mass_model_params_values {mass_model_params_values}'
+    #     if config.mass_model_params_values:
+    #         mass_model_params_values = ' '.join(map(str, config.mass_model_params_values))
+    #         script_line += f' --mass_model_params_values {mass_model_params_values}'
     
-        script_line += f' --rate_model={rate_model}'
+    #     script_line += f' --rate_model={rate_model}'
     
-        if config.rate_model_params_names:
-            rate_model_params_names = ' '.join(config.rate_model_params_names)
-            script_line += f' --rate_model_params_names {rate_model_params_names}'
+    #     if config.rate_model_params_names:
+    #         rate_model_params_names = ' '.join(config.rate_model_params_names)
+    #         script_line += f' --rate_model_params_names {rate_model_params_names}'
     
-        if config.rate_model_params_values:
-            rate_model_params_values = ' '.join(map(str, config.rate_model_params_values))
-            script_line += f' --rate_model_params_values {rate_model_params_values}'
+    #     if config.rate_model_params_values:
+    #         rate_model_params_values = ' '.join(map(str, config.rate_model_params_values))
+    #         script_line += f' --rate_model_params_values {rate_model_params_values}'
     
-        script_line += f' --spin_model={spin_model}'
+    #     script_line += f' --spin_model={spin_model}'
     
-        if config.spin_model_params_names:
-            spin_model_params_names = ' '.join(config.spin_model_params_names)
-            script_line += f' --spin_model_params_names {spin_model_params_names}'
+    #     if config.spin_model_params_names:
+    #         spin_model_params_names = ' '.join(config.spin_model_params_names)
+    #         script_line += f' --spin_model_params_names {spin_model_params_names}'
     
-        if config.spin_model_params_values:
-            spin_model_params_values = ' '.join(map(str, config.spin_model_params_values))
-            script_line += f' --spin_model_params_values {spin_model_params_values}'
+    #     if config.spin_model_params_values:
+    #         spin_model_params_values = ' '.join(map(str, config.spin_model_params_values))
+    #         script_line += f' --spin_model_params_values {spin_model_params_values}'
     
-        script_line += f' --POPmodel={POPmodel}'
+    #     script_line += f' --POPmodel={POPmodel}'
     
-        if config.prior_limits_params_names:
-            prior_limits_params_names = ' '.join(config.prior_limits_params_names)
-            script_line += f' --prior_limits_params_names {prior_limits_params_names}'
+    #     if config.prior_limits_params_names:
+    #         prior_limits_params_names = ' '.join(config.prior_limits_params_names)
+    #         script_line += f' --prior_limits_params_names {prior_limits_params_names}'
     
-        if config.prior_limits_params_values:
-            prior_limits_params_values = ' '.join(map(str, config.prior_limits_params_values))
-            script_line += f' --prior_limits_params_values {prior_limits_params_values}'
+    #     if config.prior_limits_params_values:
+    #         prior_limits_params_values = ' '.join(map(str, config.prior_limits_params_values))
+    #         script_line += f' --prior_limits_params_values {prior_limits_params_values}'
     
-        script_line += f' --batch_size={config.batch_size_popfisher} --npools={config.npools_popfisher} --snr_th={snr_th} --snr_th_FIM={snr_th_FIM} --idx_in={config.idxin_popfisher} --idx_f={idxf_popfisher} --mpi={config.mpi_popfisher} --concatenate={config.concatenate_popfisher} --FIM_rotated={config.FIM_rotated} --Pdet_sigma={config.Pdet_sigma} --resume_run={config.resume_run_popfisher}\n'
+    #     script_line += f' --batch_size={config.batch_size_popfisher} --npools={config.npools_popfisher} --snr_th={snr_th} --snr_th_FIM={snr_th_FIM} --idx_in={config.idxin_popfisher} --idx_f={idxf_popfisher} --mpi={config.mpi_popfisher} --concatenate={config.concatenate_popfisher} --FIM_rotated={config.FIM_rotated} --Pdet_sigma={config.Pdet_sigma} --resume_run={config.resume_run_popfisher}\n'
     
-        file.write(script_line)  
+    #     file.write(script_line)  
 
 
 
     # Create or overwrite the shell script
-    with open(os.path.join(out_path, 'run_gwfast.sh'), 'w') as file:
+    sh_path_pop=os.path.join(out_path, 'run_popfisher.sh')
+    with open(sh_path_pop, 'w') as file:
         file.write("#!/bin/bash\n\n")
         file.write("# Auto-generated script to run popfisher with defined parameters\n\n")
     
         # Define variables
-        file.write(f"fname_obs={fname_obs}\n")
-        file.write(f"fname_evSNRs={fname_evSNRs}\n")
-        file.write(f"fname_evFIMs={fname_evFIMs}\n")
-        file.write(f"fname_evSNRders={fname_evSNRders}\n")
-        file.write(f"fout={fout_popfisher}\n")
+        file.write(f"fname_obs={fname_obs} \\\n")
+        file.write(f"fname_evSNRs={fname_evSNRs}\\\n")
+        file.write(f"fname_evFIMs={fname_evFIMs}\\\n")
+        file.write(f"fname_evSNRders={fname_evSNRders}\\\n")
+        file.write(f"fout={fout_popfisher}\\\n")
         file.write(f"mass_model={mass_model}\n")
         file.write(f"POPmodel={POPmodel}\n")
         file.write(f"rate_model={rate_model}\n")
         file.write(f"spin_model={spin_model}\n")
+        file.write(f"delta_model={delta_model}\n")
     
         if config.mass_model_params_names:
             mass_model_params_names = ' '.join(config.mass_model_params_names)
@@ -407,6 +530,14 @@ def main():
         if config.spin_model_params_values:
             spin_model_params_values = ' '.join(map(str, config.spin_model_params_values))
             file.write(f"spin_model_params_values=\"{spin_model_params_values}\"\n")
+
+        if config.delta_model_params_names:
+            delta_model_params_names = ' '.join(config.delta_model_params_names)
+            file.write(f"delta_model_params_names=\"{delta_model_params_names}\"\n")
+    
+        if config.delta_model_params_values:
+            delta_model_params_values = ' '.join(map(str, config.delta_model_params_values))
+            file.write(f"delta_model_params_values=\"{delta_model_params_values}\"\n")
     
         if config.prior_limits_params_names:
             prior_limits_params_names = ' '.join(config.prior_limits_params_names)
@@ -430,51 +561,61 @@ def main():
         file.write(f"resume_run={config.resume_run_popfisher}\n")
     
         # Final execution command
-        file.write("\n")
+ 
+        file.write(f'\n\ncd {SCRIPT_DIR}/population/run\n\n')
         file.write("python3 calculate_hyperpar_derivatives_from_catalog.py \\\n")
-        file.write("  --fname_obs=$fname_obs \\\n")
-        file.write("  --fname_evSNRs=$fname_evSNRs \\\n")
-        file.write("  --fname_evFIMs=$fname_evFIMs \\\n")
-        file.write("  --fname_evSNRders=$fname_evSNRders \\\n")
-        file.write("  --fout=$fout \\\n")
-        file.write("  --mass_model=$mass_model \\\n")
-        file.write("  --POPmodel=$POPmodel \\\n")
-    
+        file.write(f"  --fname_obs={fname_obs} \\\n")
+        file.write(f"  --fname_evSNRs={fname_evSNRs} \\\n")
+        file.write(f"  --fname_evFIMs={fname_evFIMs} \\\n")
+        file.write(f"  --fname_evSNRders={fname_evSNRders} \\\n")
+        file.write(f"  --fout={fout_popfisher} \\\n")
+        file.write(f"  --mass_model={mass_model} \\\n")
+        file.write(f"  --POPmodel={POPmodel} \\\n")
+        
         if config.mass_model_params_names:
-            file.write("  --mass_model_params_names $mass_model_params_names \\\n")
+            file.write(f"  --mass_model_params_names {' '.join(config.mass_model_params_names)} \\\n")
         if config.mass_model_params_values:
-            file.write("  --mass_model_params_values $mass_model_params_values \\\n")
-    
-        file.write("  --rate_model=$rate_model \\\n")
-    
+            file.write(f"  --mass_model_params_values {' '.join(map(str, config.mass_model_params_values))} \\\n")
+        
+        file.write(f"  --rate_model={rate_model} \\\n")
+        
         if config.rate_model_params_names:
-            file.write("  --rate_model_params_names $rate_model_params_names \\\n")
+            file.write(f"  --rate_model_params_names {' '.join(config.rate_model_params_names)} \\\n")
         if config.rate_model_params_values:
-            file.write("  --rate_model_params_values $rate_model_params_values \\\n")
-    
-        file.write("  --spin_model=$spin_model \\\n")
-    
+            file.write(f"  --rate_model_params_values {' '.join(map(str, config.rate_model_params_values))} \\\n")
+        
+        file.write(f"  --spin_model={spin_model} \\\n")
+        
         if config.spin_model_params_names:
-            file.write("  --spin_model_params_names $spin_model_params_names \\\n")
+            file.write(f"  --spin_model_params_names {' '.join(config.spin_model_params_names)} \\\n")
         if config.spin_model_params_values:
-            file.write("  --spin_model_params_values $spin_model_params_values \\\n")
-    
+            file.write(f"  --spin_model_params_values {' '.join(map(str, config.spin_model_params_values))} \\\n")
+        
+        file.write(f"  --delta_model={delta_model} \\\n")
+        
+        if config.delta_model_params_names:
+            file.write(f"  --delta_model_params_names {' '.join(config.delta_model_params_names)} \\\n")
+        if config.delta_model_params_values:
+            file.write(f"  --delta_model_params_values {' '.join(map(str, config.delta_model_params_values))} \\\n")
+        
         if config.prior_limits_params_names:
-            file.write("  --prior_limits_params_names $prior_limits_params_names \\\n")
+            file.write(f"  --prior_limits_params_names {' '.join(config.prior_limits_params_names)} \\\n")
         if config.prior_limits_params_values:
-            file.write("  --prior_limits_params_values $prior_limits_params_values \\\n")
-    
-        file.write("  --batch_size=$batch_size \\\n")
-        file.write("  --npools=$npools \\\n")
-        file.write("  --snr_th=$snr_th \\\n")
-        file.write("  --snr_th_FIM=$snr_th_FIM \\\n")
-        file.write("  --idx_in=$idx_in \\\n")
-        file.write("  --idx_f=$idx_f \\\n")
-        file.write("  --mpi=$mpi \\\n")
-        file.write("  --concatenate=$concatenate \\\n")
-        file.write("  --FIM_rotated=$FIM_rotated \\\n")
-        file.write("  --Pdet_sigma=$Pdet_sigma \\\n")
-        file.write("  --resume_run=$resume_run\n")
+            file.write(f"  --prior_limits_params_values {' '.join(map(str, config.prior_limits_params_values))} \\\n")
+        
+        file.write(f"  --batch_size={config.batch_size_popfisher} \\\n")
+        file.write(f"  --npools={config.npools_popfisher} \\\n")
+        file.write(f"  --snr_th={snr_th} \\\n")
+        file.write(f"  --snr_th_FIM={snr_th_FIM} \\\n")
+        file.write(f"  --idx_in={config.idxin_popfisher} \\\n")
+        file.write(f"  --idx_f={idxf_popfisher} \\\n")
+        file.write(f"  --mpi={config.mpi_popfisher} \\\n")
+        file.write(f"  --concatenate={config.concatenate_popfisher} \\\n")
+        file.write(f"  --FIM_rotated={config.FIM_rotated} \\\n")
+        file.write(f"  --Pdet_sigma={config.Pdet_sigma} \\\n")
+        file.write(f"  --resume_run={config.resume_run_popfisher}\n")
+
+        os.chmod(sh_path_pop, 0o755)
 
 
 
@@ -486,6 +627,12 @@ def main():
     ##########################################################################
     
     print('\nDone. Total execution time: %.2fs' % (time.time() - in_time))
+    print(f'\nScript to run gwfast in {sh_path}')
+    print(f'\nScript to run gwfast.population in {sh_path_pop}')
+    print('PARENT_DIR,',PARENT_DIR)
+    print('SCRIPT_DIR,',SCRIPT_DIR)
+     
+
     
     sys.stdout = sys.__stdout__
     sys.stderr = sys.__stderr__

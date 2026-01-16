@@ -1369,3 +1369,22 @@ def plot_mass_rate_spin_delta_distributions(p_pop,p_draw=None,samples_pdraw=None
     axs[0,0].legend(loc='upper right')
 
     return 
+
+def save_data(fname, data, ):
+    """
+    Store a dictionary containing the events parameters in ``h5`` file.
+    
+    :param str fname: The name of the file to store the events in. This has to include the path and the ``h5`` or ``hdf5`` extension.
+    :param dict(array, array, ...) data: The dictionary conatining the parameters of the events, as in :py:data:`events`.
+    
+    """
+    print('Saving to %s '%fname)
+    with h5py.File(fname, 'w') as out:
+            
+                    
+        def cd(n, d):
+            d = np.array(d)
+            out.create_dataset(n, data=d, compression='gzip', shuffle=True)
+        
+        for key in data.keys():
+            cd(key, data[key])
