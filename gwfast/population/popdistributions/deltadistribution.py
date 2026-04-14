@@ -38,7 +38,7 @@ def _ensure_hessian_shape(raw):
     if arr.ndim == 2:
         return arr[:, :, None]
     if arr.ndim == 3:
-        # if shape is (Nevents,2,2) -> transpose
+        #if shape is (Nevents,2,2) -> transpose
         if arr.shape[1] == 2 and arr.shape[2] == 2 and arr.shape[0] != 2:
             return np.transpose(arr, (1,2,0))
         return arr
@@ -49,8 +49,8 @@ class PhiPNDistribution(ABC):
     '''
     Abstract class to compute Phi_PN distributions.
 
-    :param dict, optional hyperparameters: Dictionary containing the hyperparameters of the redshift model as keys and their fiducial value as entry.
-    :param dict, optional priorlims_parameters: Dictionary containing the parameters of the redshift model as keys and their prior limits value as entry, given as a tuple :math:`(l, h)`.
+    :param dict, optional hyperparameters: Dictionary containing the hyperparameters of the deltaPN model as keys and their fiducial value as entry.
+    :param dict, optional priorlims_parameters: Dictionary containing the parameters of the deltaPN model as keys and their prior limits value as entry, given as a tuple :math:`(l, h)`.
     
     '''
 
@@ -135,8 +135,6 @@ class PhiPNDistribution(ABC):
 class Gauss_PhiPNDistribution(PhiPNDistribution):
     '''
     Gaussian Phi_PN distribution for a single PN order.
-    Questa versione è stata riscritta per usare una lambda esplicita con jacrev,
-    mantenendo la coerenza di stile con la classe N-dimensionale.
     
     :param list, optional orderPN: List containing the single PN order to model, e.g., [0]. Defaults to [0].
     '''
@@ -147,7 +145,7 @@ class Gauss_PhiPNDistribution(PhiPNDistribution):
             orderPN = [0]
         
         if len(orderPN) != 1:
-            raise ValueError("Gauss_PhiPNDistribution only supports a single PN order. For multiple orders, use Gauss2D_PhiPNDistribution or other distributions.")
+            raise ValueError("Gauss_PhiPNDistribution only supports a single PN order. For multiple orders, use other distributions.")
 
         self.orderPN = orderPN
         self.order_idx = self.orderPN[0]
@@ -172,7 +170,7 @@ class Gauss_PhiPNDistribution(PhiPNDistribution):
         if priorlims_parameters is not None:
             self.set_priorlimits(priorlims_parameters)
         else:
-            self.set_priorlimits({self.phi_name: (-0.5, 0.5)})
+            self.set_priorlimits({self.phi_name: (-5.0, 5.0)})
             
         self.derivative_par_nums = {name: i for i, name in enumerate(self.expected_hyperpars)}
     
@@ -180,7 +178,6 @@ class Gauss_PhiPNDistribution(PhiPNDistribution):
     def PhiPN_function(self, phi_val, uselog=False, **hyperparams):
         '''
         Delta PN distribution function for a single order.
-        La firma ora accetta il valore di Phi come primo argomento posizionale.
         '''
         mu_c = hyperparams.get(self.mu_name, self.hyperpar_dict[self.mu_name])
         sigma_c = hyperparams.get(self.sigma_name, self.hyperpar_dict[self.sigma_name])
@@ -247,7 +244,7 @@ class Gauss_PhiPNDistribution(PhiPNDistribution):
 
 class Gauss2D_PhiPNDistribution(PhiPNDistribution):
     '''
-    N-dimensional Gaussian Phi_PN distribution for a generic list of PN orders.
+    2-dimensional Gaussian Phi_PN distribution for a generic list of PN orders.
     This class generalizes the logic to any number of dimensions based on the 'orderPN' parameter.
     
     :param list, optional orderPN: List of PN orders to model, e.g., [0, 1]. Defaults to [0, 1].
@@ -300,7 +297,7 @@ class Gauss2D_PhiPNDistribution(PhiPNDistribution):
         if priorlims_parameters is not None:
             self.set_priorlimits(priorlims_parameters)
         else:
-            prior_limits = {name: (-0.5, 0.5) for name in self.phi_names}
+            prior_limits = {name: (-5.0, 5.0) for name in self.phi_names}
             self.set_priorlimits(prior_limits)
             
         self.derivative_par_nums = {name: i for i, name in enumerate(self.expected_hyperpars)}
@@ -405,171 +402,9 @@ class Gauss2D_PhiPNDistribution(PhiPNDistribution):
         return np.asarray(hess_matrix)
 
 
-class Gauss3D_PhiPNDistribution(PhiPNDistribution):
-    '''
-    N-dimensional Gaussian Phi_PN distribution for a generic list of PN orders.
-    This class generalizes the logic to any number of dimensions based on the 'orderPN' parameter.
-
-    To create a 3D distribution, initialize with: orderPN=[0, 1, 2]
-    To create a 5D distribution, initialize with: orderPN=[0, 1, 2, 3, 4]
-    
-    :param list, optional orderPN: List of PN orders to model, e.g., [0, 1, 2]. Defaults to [0, 1, 2].
-    :param dict, optional hyperparameters: Dictionary of hyperparameters.
-    :param dict, optional priorlims_parameters: Dictionary of prior limits for the Phi parameters.
-    '''
-    
-    def __init__(self, hyperparameters=None, priorlims_parameters=None, orderPN=None):
-
-        self.key = jax.random.PRNGKey(42)
-        
-        if orderPN is None:
-            orderPN = [0, 1, 2]
-        self.orderPN = sorted(orderPN)
-        self.N_dims = len(self.orderPN)
-        
-        self.phi_names = [f'Phi_{i}' for i in self.orderPN]
-        self.mu_names = [f'mu_PN{i}' for i in self.orderPN]
-        self.sigma_names = []
-        
-        for i in range(self.N_dims):
-            for j in range(i, self.N_dims):
-                idx1, idx2 = sorted((self.orderPN[i], self.orderPN[j]))
-                sigma_name = f'sigma_{idx1}{idx2}'
-                if sigma_name not in self.sigma_names:
-                    self.sigma_names.append(sigma_name)
-        
-        self.expected_hyperpars = self.mu_names + self.sigma_names
-        
-        super().__init__()
-        
-        self.set_parameters(self.phi_names)
-        
-        if hyperparameters is not None:
-            self.set_hyperparameters(hyperparameters)
-        else:
-            print('Expected hyperparameters: ', self.expected_hyperpars)
-            basevalues = {}
-            for mu_name in self.mu_names:
-                basevalues[mu_name] = 0.0
-            for sigma_name in self.sigma_names:
-                indices = sigma_name.split('_')[1]
-                if indices[0] == indices[-1]:
-                    basevalues[sigma_name] = 0.05 
-                else:
-                    basevalues[sigma_name] = 0.0
-            print('Base values are: ', list(basevalues.items()))
-            self.set_hyperparameters(basevalues)
-        
-        if priorlims_parameters is not None:
-            self.set_priorlimits(priorlims_parameters)
-        else:
-            prior_limits = {name: (-0.5, 0.5) for name in self.phi_names}
-            self.set_priorlimits(prior_limits)
-            
-        self.derivative_par_nums = {name: i for i, name in enumerate(self.expected_hyperpars)}
-
-    def _build_mean_and_cov(self, **hyperparams):
-        """Helper function to dynamically build mean vector and covariance matrix."""
-        mean_vector = jnp.array([hyperparams.get(name, self.hyperpar_dict[name]) for name in self.mu_names])
-
-        cov_matrix = jnp.zeros((self.N_dims, self.N_dims))
-        for i in range(self.N_dims):
-            for j in range(i, self.N_dims):
-                idx1, idx2 = sorted((self.orderPN[i], self.orderPN[j]))
-                sigma_name = f'sigma_{idx1}{idx2}'
-                sigma_val = hyperparams.get(sigma_name, self.hyperpar_dict[sigma_name])
-                
-                if i == j:
-                    cov_matrix = cov_matrix.at[i, i].set(sigma_val**2)
-                else:
-                    cov_matrix = cov_matrix.at[i, j].set(sigma_val)
-                    cov_matrix = cov_matrix.at[j, i].set(sigma_val)
-
-        for i in range(self.N_dims):
-            for j in range(i, self.N_dims):
-                if i != j:
-                    if abs(cov_matrix[i,j]) >= jnp.sqrt(cov_matrix[i,i] * cov_matrix[j,j]):
-                            raise ValueError(f"Invalid covariance: |cov_ij|={abs(sigma_val)} must be < {cov_matrix[i,i]*cov_matrix[j,j]}")
-        
-        return mean_vector, cov_matrix
-
-    def PhiPN_function(self, *phis, uselog=False, **hyperparams):
-        if len(phis) != self.N_dims:
-            raise ValueError(f"Expected {self.N_dims} Phi arguments, but got {len(phis)}")
-
-        mean_vector, cov_matrix = self._build_mean_and_cov(**hyperparams)
-        
-        samples = jnp.stack(phis, axis=-1)
-        
-        good_samples = jnp.full(jnp.shape(phis[0]), True)
-        for i, phi_val in enumerate(phis):
-            good_samples &= self._isin_prior_range(self.phi_names[i], phi_val)
-
-        distr = jsc.stats.multivariate_normal.pdf(samples, mean=mean_vector, cov=cov_matrix)
-        logdistr = jsc.stats.multivariate_normal.logpdf(samples, mean=mean_vector, cov=cov_matrix)
-
-        if not uselog:
-            return jnp.where(good_samples, distr, jnp.zeros_like(distr))
-        else:
-            return jnp.where(good_samples, logdistr, jnp.full_like(logdistr, -jnp.inf))
-
-    def sample_population(self, size, **hyperparams):
-        
-        mean_vector, cov_matrix = self._build_mean_and_cov(**hyperparams)
-        
-        self.key, subkey = jax.random.split(self.key)
-        sampled_points = jax.random.multivariate_normal(subkey, mean=mean_vector, cov=cov_matrix, shape=(size,))
-        
-        return {self.phi_names[i]: np.asarray(sampled_points[:, i]) for i in range(self.N_dims)}
-
-    def PhiPN_function_derivative(self, *phis, uselog=False, **hyperparams):
-        if len(phis) != self.N_dims:
-            raise ValueError(f"Expected {self.N_dims} Phi arguments, but got {len(phis)}")
-
-        hyperparam_values = [hyperparams.get(name, self.hyperpar_dict[name]) for name in self.expected_hyperpars]
-
-        def funder(*all_args):
-            phis_in = all_args[:self.N_dims]
-            hyperparams_in = all_args[self.N_dims:]
-            hyperparams_dict = {name: val for name, val in zip(self.expected_hyperpars, hyperparams_in)}
-            
-            return self.PhiPN_function(*phis_in, uselog=uselog, **hyperparams_dict)
-
-        argnums_to_diff = tuple(range(self.N_dims, self.N_dims + len(self.expected_hyperpars)))
-    
-        all_args = list(phis) + hyperparam_values
-        raw = jacrev(funder, argnums=argnums_to_diff)(*all_args)
-
-        derivs_all = jnp.stack(raw, axis=-1)
-        return np.asarray(derivs_all).T
-
-    def PhiPN_function_hessian(self, *phis, uselog=False, **hyperparams):
-        if len(phis) != self.N_dims:
-            raise ValueError(f"Expected {self.N_dims} Phi arguments, but got {len(phis)}")
-
-        hyperparam_values = [hyperparams.get(name, self.hyperpar_dict[name]) for name in self.expected_hyperpars]
-
-        def funder(*all_args):
-            phis_in = all_args[:self.N_dims]
-            hyperparams_in = all_args[self.N_dims:]
-            hyperparams_dict = {name: val for name, val in zip(self.expected_hyperpars, hyperparams_in)}
-            return self.PhiPN_function(*phis_in, uselog=uselog, **hyperparams_dict)
-        
-        argnums_to_diff = tuple(range(self.N_dims, self.N_dims + len(self.expected_hyperpars)))
-        
-        all_args = list(phis) + hyperparam_values
-        rawH = hessian(funder, argnums=argnums_to_diff)(*all_args)
-
-        num_hyper = len(self.expected_hyperpars)
-        hess_matrix = jnp.stack([jnp.stack([rawH[i][j] for j in range(num_hyper)], axis=0)for i in range(num_hyper)],axis=0)
-        
-        return np.asarray(hess_matrix)
-
-
-
 class Gauss5D_PhiPNDistribution(PhiPNDistribution):
     '''
-    N-dimensional Gaussian Phi_PN distribution for a generic list of PN orders.
+    5-dimensional Gaussian Phi_PN distribution for a generic list of PN orders.
     This class generalizes the logic to any number of dimensions based on the 'orderPN' parameter.
 
     The default is a 5D distribution for orders [0, 1, 2, 3, 4].
@@ -624,7 +459,7 @@ class Gauss5D_PhiPNDistribution(PhiPNDistribution):
         if priorlims_parameters is not None:
             self.set_priorlimits(priorlims_parameters)
         else:
-            prior_limits = {name: (-0.5, 0.5) for name in self.phi_names}
+            prior_limits = {name: (-5., 5.) for name in self.phi_names}
             self.set_priorlimits(prior_limits)
             
         self.derivative_par_nums = {name: i for i, name in enumerate(self.expected_hyperpars)}
@@ -730,7 +565,7 @@ class Gauss5D_PhiPNDistribution(PhiPNDistribution):
 
 class Gauss7D_PhiPNDistribution(PhiPNDistribution):
     """
-    N-dimensional Gaussian Phi_PN distribution for a generic list of PN orders.
+    7-dimensional Gaussian Phi_PN distribution for a generic list of PN orders.
     Default is 7D distribution for orders [0,1,2,3,4,5,6].
 
     :param list orderPN: list of PN orders to model, defaults to [0..6]
@@ -771,7 +606,6 @@ class Gauss7D_PhiPNDistribution(PhiPNDistribution):
                 basevalues[mu_name] = 0.0
             for sigma_name in self.sigma_names:
                 indices = sigma_name.split('_')[1]
-                # diagonal entries like sigma_00, sigma_11 -> set small positive std
                 if indices[0] == indices[-1]:
                     basevalues[sigma_name] = 0.05
                 else:
@@ -781,7 +615,7 @@ class Gauss7D_PhiPNDistribution(PhiPNDistribution):
         if priorlims_parameters is not None:
             self.set_priorlimits(priorlims_parameters)
         else:
-            prior_limits = {name: (-0.5, 0.5) for name in self.phi_names}
+            prior_limits = {name: (-5.0, 5.0) for name in self.phi_names}
             self.set_priorlimits(prior_limits)
 
         self.derivative_par_nums = {name: i for i, name in enumerate(self.expected_hyperpars)}
@@ -872,7 +706,6 @@ class Gauss7D_PhiPNDistribution(PhiPNDistribution):
         rawH = hessian(funder, argnums=argnums_to_diff)(*all_args)
 
         num_hyper = len(self.expected_hyperpars)
-        #assemble block Hessian matrix (num_hyper x num_hyper)
         hess_matrix = jnp.block([[jnp.array(rawH[i][j]) for j in range(num_hyper)] for i in range(num_hyper)])
 
         return np.asarray(hess_matrix)
