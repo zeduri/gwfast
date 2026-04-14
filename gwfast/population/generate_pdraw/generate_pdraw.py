@@ -333,6 +333,7 @@ def main():
         file.write(f'fout="{fout_gwfast}"\n')
         file.write(f'wf_model="{wf_model}"\n')
         file.write(f'devPN={config.waveform.devPN}\n')
+        file.write(f'orderPN={config.waveform.orderPN}\n')
         file.write(f"lalargs={lalargs}\n")
         file.write(f"net={net}\n")
         file.write(f"psds={psds}\n")
@@ -376,6 +377,7 @@ def main():
         file.write(f'  --fout={fout_gwfast} \\\n')
         file.write(f'  --wf_model={wf_model} \\\n')
         file.write(f'  --devPN={config.waveform.devPN} \\\n')
+        file.write(f'  --orderPN={config.waveform.orderPN}\n')
         file.write(f'  --lalargs {lalargs} \\\n')
         file.write(f'  --snr_th={snr_th_FIM} \\\n')
         file.write(f'  --batch_size={config.batch_size_gwfast} \\\n')
@@ -592,6 +594,7 @@ def main():
             file.write(f"  --spin_model_params_values {' '.join(map(str, config.spin_model_params_values))} \\\n")
         
         file.write(f"  --delta_model={delta_model} \\\n")
+        file.write(f"  --orderPN={config.waveform.orderPN} \\\n")
         
         if config.delta_model_params_names:
             file.write(f"  --delta_model_params_names {' '.join(config.delta_model_params_names)} \\\n")

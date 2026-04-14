@@ -9,7 +9,8 @@ import gwfast.population.POPmodels as POPmodels
 from gwfast.population.popdistributions.massdistribution import *
 from gwfast.population.popdistributions.spindistribution import *
 from gwfast.population.popdistributions.ratedistribution import *
-from gwfast.population.POPmodels import MassSpinRedshiftIndependent_PopulationModel,MassRedshiftIndependent_PopulationModel,MassOnly_PopulationModel
+from gwfast.population.popdistributions.deltadistribution import *
+from gwfast.population.POPmodels import PhiOnly_PopulationModel,MassSpinRedshiftPhiIndependent_PopulationModel,MassSpinRedshiftIndependent_PopulationModel,MassRedshiftIndependent_PopulationModel,MassOnly_PopulationModel
 
 ######## gwfast
 import gwfast.gwfastGlobals as glob
@@ -25,8 +26,7 @@ from gwfast.waveforms import LAL_WF
 # Shortcuts for distribution functions names; nothing to edit here
 ########################################################################################
 
-mass_models_dict = {
-                    'TruncatedPowerLaw': TruncatedPowerLaw_modsmooth_MassDistribution,
+mass_models_dict = {'TruncatedPowerLaw': TruncatedPowerLaw_modsmooth_MassDistribution,
                     'PowerLawPlusPeak': PowerLawPlusPeak_modsmooth_MassDistribution,
                     }
 
@@ -40,10 +40,18 @@ spin_models_dict = {'Default': DefaultPrecessing_SpinDistribution,
                     'FlatNonPrecessing': FlatNonPrecessing_SpinDistribution,
                     'GaussNonPrecessing': GaussNonPrecessing_SpinDistribution,
                     }
-POPmodel_dict = {'MassSpinRedshiftIndependent': MassSpinRedshiftIndependent_PopulationModel,
-                'MassRedshiftIndependent': MassRedshiftIndependent_PopulationModel,
-                'MassOnly': MassOnly_PopulationModel,
-                    }
+
+delta_models_dict = {'Gauss': Gauss_PhiPNDistribution,
+                     'Gauss2D': Gauss2D_PhiPNDistribution,
+                     'Gauss5D': Gauss5D_PhiPNDistribution,
+                     }
+
+POPmodel_dict = {'MassSpinRedshiftPhiIndependent': MassSpinRedshiftPhiIndependent_PopulationModel,
+                 'MassSpinRedshiftIndependent': MassSpinRedshiftIndependent_PopulationModel,
+                 'MassRedshiftIndependent': MassRedshiftIndependent_PopulationModel,
+                 'MassOnly': MassOnly_PopulationModel,
+                 'PhiOnly': PhiOnly_PopulationModel,
+                }
 
 
 #############################################################################################
@@ -56,12 +64,14 @@ POPmodel_dict = {'MassSpinRedshiftIndependent': MassSpinRedshiftIndependent_Popu
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 config_network='ETS' # edit here
-config_waveform='precessing' #edit here
-CPUs=10
-N_chunk=20 
-N_goal=10 # Number of events you want to reach 
-snr_th=2. # Threshold value for the SNR to use in the Pdet function. We generate Ngoal events that have snr>snr_th
-snr_th_FIM=0 # snr over which we will compute the Fishers. We compute all the fishers and then cut in the population analysis with pdet(theta). This corresponds to snr_th in gwfast
+config_waveform='aligned' #edit here
+devPN=1
+orderPN=[0]
+CPUs=32
+N_chunk=50 
+N_goal=150000 # Number of events you want to reach 
+snr_th=15.0 # Threshold value for the SNR to use in the Pdet function. We generate Ngoal events that have snr>snr_th
+snr_th_FIM=0.0 # snr over which we will compute the Fishers. We compute all the fishers and then cut in the population analysis with pdet(theta). This corresponds to snr_th in gwfast
 
 
 
@@ -71,6 +81,8 @@ snr_th_FIM=0 # snr over which we will compute the Fishers. We compute all the fi
 if config_waveform=='aligned':
     wf_model='IMRPhenomHM'
     waveform=IMRPhenomHM()
+    if devPN is not None:
+        waveform= IMRPhenomHM(devPN=devPN, orderPN=orderPN)
 elif config_waveform=='precessing':
     wf_model='LAL-IMRPhenomXPHM'
     lalargs=['HM','precessing']
@@ -79,7 +91,7 @@ elif config_waveform=='precessing':
 
 ####### DETECTOR NETWORK
 
-if config_network=='O4': ###### LVK O5
+if config_network=='O5': ###### LVK O5
     net=['L1', 'H1', 'Virgo','KAGRA']
     psds=[glob.detPath +'/observing_scenarios_paper/AplusDesign.txt',
         glob.detPath +'/observing_scenarios_paper/AplusDesign.txt',
@@ -125,16 +137,22 @@ elif config_network=='ET+2CE': #ET+CE
 alpha=0.5
 beta=0.5
 sigmah=20.
+#mu_PN2 = -0.10
+#mu_PN3 = 0.10
+#sigma_01 = 0.001
 mass_model_inj='PowerLawPlusPeak'
 mass_model_params_names_inj=['alpha_m','beta_q','sigma_h']
-mass_model_params_values_inj=[alpha, beta,sigmah]
+mass_model_params_values_inj=[alpha, beta, sigmah]
 rate_model_inj='MadauDickinson'
 rate_model_params_names_inj=[]
 rate_model_params_values_inj=[]
-spin_model_inj='Default'
+spin_model_inj='GaussNonPrecessing'
 spin_model_params_names_inj=[]
 spin_model_params_values_inj=[]
-pop_model_inj='MassSpinRedshiftIndependent'
+delta_model_inj='Gauss'
+delta_model_params_names_inj = []
+delta_model_params_values_inj = []
+pop_model_inj='MassSpinRedshiftPhiIndependent'
 
 # nothing to edit here
 MASS_model_inj = mass_models_dict[mass_model_inj]()
@@ -151,10 +169,18 @@ SPIN_model_inj = spin_models_dict[spin_model_inj]()
 if spin_model_params_names_inj:
     for i,par in enumerate(spin_model_params_names_inj):
         SPIN_model_inj.update_hyperparameters({par: spin_model_params_values_inj[i]})
+
+DELTA_model_inj = delta_models_dict[delta_model_inj](orderPN=orderPN)
+if delta_model_params_names_inj:
+    for i,par in enumerate(delta_model_params_names_inj):
+        DELTA_model_inj.update_hyperparameters({par: delta_model_params_values_inj[i]})
+
+
      
 p_draw = POPmodel_dict[pop_model_inj](mass_function=MASS_model_inj, 
                                 rate_function=RATE_model_inj, 
                                 spin_function=SPIN_model_inj,
+                                PhiPN_function=DELTA_model_inj,
                                 verbose=True)
 
 
@@ -171,9 +197,9 @@ idxin_popfisher=0 #Index of the event in the catalog from which to start the cal
 idxf_popfisher=None #Index of the event in the catalog at which to end the calculation. If set to None, the Fisher will be computed using the entire catalog.
 
 concatenate_popfisher=1
-mpi_popfisher=0 
+mpi_popfisher=1 
 batch_size_popfisher=10
-npools_popfisher=50
+npools_popfisher=112
 resume_run_popfisher=0 #default=0, Int specifying whether to resume previous run.
 
 # choose population model for the analysis
@@ -183,14 +209,19 @@ mass_model_params_values=[20.]
 rate_model='MadauDickinson'
 rate_model_params_names=[]
 rate_model_params_values=[]
-spin_model='Default'
+spin_model='GaussNonPrecessing'
 spin_model_params_names=[]
 spin_model_params_values=[]
-pop_model_rec='MassSpinRedshiftIndependent'
+delta_model='Gauss'
+delta_model_params_names = []
+delta_model_params_values = []
+pop_model_rec='MassSpinRedshiftPhiIndependent'
 
-prior_limits_params_names=['chi1','chi2','phiJL','phi12','tilt1','tilt2'] 
-prior_limits_params_values=[1.,1.,0.025330295910584444, 0.025330295910584444, 0.10132118364233778 ,0.10132118364233778]
 
+prior_limits_params_names=['Mc', 'eta', 'chi1z', 'chi2z']
+prior_limits_params_values=[0.000013717421124828532, 16, 0.25, 0.25]
+#prior_limits_params_names=['chi1','chi2','phiJL','phi12','tilt1','tilt2'] 
+#prior_limits_params_values=[1.,1.,0.025330295910584444, 0.025330295910584444, 0.10132118364233778 ,0.10132118364233778]
 
 
 
@@ -209,10 +240,16 @@ SPIN_model = spin_models_dict[spin_model]()
 if spin_model_params_names:
     for i,par in enumerate(spin_model_params_names):
         SPIN_model.update_hyperparameters({par: spin_model_params_values[i]})
+
+DELTA_model = delta_models_dict[delta_model](orderPN=orderPN)
+if delta_model_params_names:
+    for i,par in enumerate(delta_model_params_names):
+        DELTA_model.update_hyperparameters({par: delta_model_params_values[i]})
         
 p_pop = POPmodel_dict[pop_model_rec](mass_function=MASS_model, 
                                 rate_function=RATE_model, 
                                 spin_function=SPIN_model,
+                                PhiPN_function=DELTA_model,
                                 verbose=True)
 
 
@@ -224,26 +261,26 @@ p_pop = POPmodel_dict[pop_model_rec](mass_function=MASS_model,
 # 5. Edit here: the inputs of this section will be used to run popfisher
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-fname_evSNRs_gwfast='' #Path to output folder containing SNRs (it has not necessary to exist before the script is launched since gwfast can compute the snrs of the events)
-batch_size_gwfast=1
-npools_gwfast=50
+fname_evSNRs_gwfast='TESTS/Gamma_I_15' #Path to output folder containing SNRs (it has not necessary to exist before the script is launched since gwfast can compute the snrs of the events)
+batch_size_gwfast=5
+npools_gwfast=112
 
 fmin=2.
 fmax=None
 idxin_gwfast=0
 idxf_gwfast=None #If set to None, the Fishers will be computed using the entire catalog.
 
-return_snr_derivatives=1 
+return_snr_derivatives=0
 return_derivatives=0  #0=no
 return_all=1
 
 concatenate_gwfast = 1
-mpi=0 
+mpi=1
 resume_run = 0
 
 netfile=None
 
-compute_fisher=1 
+compute_fisher=0 
 compute_imrsplit=0 #0=np
 
 rot=1 
@@ -260,30 +297,4 @@ jit_fisher=0
 fix_fgrid=0
 fix_fgrid_df=0.125
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-         
-
-
-
+#lalargs = []
