@@ -11,9 +11,8 @@ from astropy.cosmology import Planck18, z_at_value
 from astropy import units as uAstro
 
 
-SCRIPT_DIR = os.path.dirname(os.path.realpath(os.path.join(os.getcwd())))
-#sys.path.append(os.path.normpath(os.path.join(SCRIPT_DIR,'..')))
-sys.path.append(SCRIPT_DIR)
+SCRIPT_DIR = os.path.dirname(os.path.realpath(os.path.join(os.getcwd()))) #sys.path.append(os.path.normpath(os.path.join(SCRIPT_DIR,'..'))) 
+sys.path.append(SCRIPT_DIR) 
 import POPutils as utils
 from POPmodels import MassSpinRedshiftPhiIndependent_PopulationModel,MassSpinRedshiftIndependent_PopulationModel,MassOnly_PopulationModel,MassRedshiftIndependent_PopulationModel, PhiOnly_PopulationModel
 from popdistributions.massdistribution import TruncatedPowerLaw_modsmooth_MassDistribution, PowerLawPlusPeak_modsmooth_MassDistribution
@@ -61,7 +60,8 @@ POPmodel_dict = {'MassSpinRedshiftPhiIndependent': MassSpinRedshiftPhiIndependen
                  'MassSpinRedshiftIndependent': MassSpinRedshiftIndependent_PopulationModel,
                  'MassRedshiftIndependent': MassRedshiftIndependent_PopulationModel,
                  'MassOnly': MassOnly_PopulationModel,
-                 'PhiOnly': PhiOnly_PopulationModel,}
+                 'PhiOnly': PhiOnly_PopulationModel,
+                    }
 
 #####################################################################################
 # input/output logic
@@ -144,15 +144,11 @@ def get_indexes(p, all_n_per_pool):
 # load and save results
 #####################################################################################
 
-def to_file(termI_der, termI_hess, termII, termIII, termIV, termV, out_path, suff=''):
+def to_file(termI_der, termI_hess, out_path, suff=''):
     
     print('Saving all to files. Names of termI matrix: %s' %('termI_matr'+suff+'.npy'))
     onp.save(os.path.join(out_path, 'termI_der'+suff+'.npy'), termI_der)
     onp.save(os.path.join(out_path, 'termI_hess'+suff+'.npy'), termI_hess)
-    onp.save(os.path.join(out_path, 'termII_matr'+suff+'.npy'), termII)
-    onp.save(os.path.join(out_path, 'termIII_matr'+suff+'.npy'), termIII)
-    onp.save(os.path.join(out_path, 'termIV_matr'+suff+'.npy'), termIV)
-    onp.save(os.path.join(out_path, 'termV_matr'+suff+'.npy'), termV)
     
     print('Saving successful.')
     
@@ -162,12 +158,8 @@ def from_file(out_path, suff=''):
     print('Loading all to files. Names of termI matrix: %s' %('termI_matr'+suff+'.npy'))
     termI_der  = onp.load(os.path.join(out_path, 'termI_der'+suff+'.npy'))
     termI_hess = onp.load(os.path.join(out_path, 'termI_hess'+suff+'.npy'))
-    termII     = onp.load(os.path.join(out_path, 'termII_matr'+suff+'.npy'))
-    termIII    = onp.load(os.path.join(out_path, 'termIII_matr'+suff+'.npy'))
-    termIV     = onp.load(os.path.join(out_path, 'termIV_matr'+suff+'.npy'))
-    termV      = onp.load(os.path.join(out_path, 'termV_matr'+suff+'.npy'))
     
-    return termI_der, termI_hess, termII, termIII, termIV, termV
+    return termI_der, termI_hess
     
 def delete_files(idxin, idxf, out_path):
     
@@ -175,10 +167,6 @@ def delete_files(idxin, idxf, out_path):
     suff = '_'+str(idxin)+'_to_'+str(idxf)
     os.remove(os.path.join(out_path, 'termI_der'+suff+'.npy'))
     os.remove(os.path.join(out_path, 'termI_hess'+suff+'.npy'))
-    os.remove(os.path.join(out_path, 'termII_matr'+suff+'.npy'))
-    os.remove(os.path.join(out_path, 'termIII_matr'+suff+'.npy'))
-    os.remove(os.path.join(out_path, 'termIV_matr'+suff+'.npy'))
-    os.remove(os.path.join(out_path, 'termV_matr'+suff+'.npy'))
 
 
 def save_data(fname, data, ):
@@ -392,7 +380,7 @@ def create_pn_param_dicts(base_rot, base_or, orderPN):
 
 def main(idx, FLAGS):
 
-        idx=idx-1
+        idx=idx-1        
 
         ti=  time.time()
 
@@ -411,7 +399,7 @@ def main(idx, FLAGS):
         print('------------------------\n')
         print('------------ Spin distribution used:  ------------\n%s' %str(FLAGS.spin_model))
         print('------------------------\n')
-        print('------------ Delta distribution used:  ------------\n%s' %str(FLAGS.delta_model))
+        print('------------ Phi_PN distribution used:  ------------\n%s' %str(FLAGS.delta_model))
         print('------------------------\n')
         print('------------ Model used:  ------------\n%s' %str(FLAGS.POPmodel))
         print('------------------------\n')
@@ -428,9 +416,13 @@ def main(idx, FLAGS):
         if FLAGS.spin_model_params_names:
             for i,par in enumerate(FLAGS.spin_model_params_names):
                 SPIN_model.update_hyperparameters({par: FLAGS.spin_model_params_values[i]})
-        DELTA_model = delta_models_dict[FLAGS.delta_model]()
+        DELTA_model_class = delta_models_dict[FLAGS.delta_model]
+        if FLAGS.orderPN:
+            DELTA_model = DELTA_model_class(orderPN=FLAGS.orderPN)
+        else:
+            DELTA_model = DELTA_model_class()
         if FLAGS.delta_model_params_names:
-            for i,par in enumerate(FLAGS.delta_model_params_names):
+            for i, par in enumerate(FLAGS.delta_model_params_names):
                 DELTA_model.update_hyperparameters({par: FLAGS.delta_model_params_values[i]})
         
         if len(SPIN_model.par_list) == 2:
@@ -460,7 +452,6 @@ def main(idx, FLAGS):
                                 spin_function=SPIN_model,
                                 PhiPN_function=DELTA_model,
                                 verbose=True)
-
         elif FLAGS.POPmodel=='PhiOnly':
             POPmodel = popmodel(#mass_function=MASS_model, 
                                 rate_function=RATE_model, 
@@ -477,33 +468,7 @@ def main(idx, FLAGS):
             
             ev_chunk = FLAGS.events_lists[str(idx)][it] 
             snr_chunk = FLAGS.snrs_lists[str(idx)][it]
-            FIM_chunk = FLAGS.fishers_lists[str(idx)][it]
-            snrder_chunk = FLAGS.SNRderivatives_lists[str(idx)][it]
             
-            if FLAGS.prior_limits_params_names and FLAGS.prior_limits_params_values:
-                parpriors=dict(zip(FLAGS.prior_limits_params_names, FLAGS.prior_limits_params_values))
-            else:
-                parpriors=None
-
-            if parpriors is not None:
-                diag = onp.array([parpriors[key] if key in parpriors.keys() else 0. for key in parnums_or.keys()])
-                #pp   = onp.eye(FIM_use.shape[0])*diag
-                pp   = onp.eye(FIM_chunk.shape[0])*diag
-                if FIM_chunk.ndim==2:
-                    FIM_chunk = pp + FIM_chunk
-                else:
-                    FIM_chunk = pp[:,:,onp.newaxis] + FIM_chunk
-
-            
-            
-            if FLAGS.FIM_rotated==0:
-                for i in range(FIM_chunk.shape[-1]):
-                    FIM_chunk[:,:,i]  = FISHER_McetadL_to_m1srcm2srcz(FIM_chunk[:,:,i], parnums_or, {k:ev_chunk[k][i] for k in ev_chunk.keys()})
-                    snrder_chunk[:,i] = DERSNR_McetadL_to_m1srcm2srcz(snrder_chunk[:,i], parnums_or, {k:ev_chunk[k][i] for k in ev_chunk.keys()})
-
-            Pdetder_chunk = snrder_chunk*onp.sqrt(0.5/onp.pi)*onp.exp(-(snr_chunk-FLAGS.snr_th)**2/(2*FLAGS.Pdet_sigma**2))/FLAGS.Pdet_sigma
-
-            nevents_chunk = len(ev_chunk['dL'])
             
             i_in = idxin+FLAGS.idx_in
             i_f = idxf+FLAGS.idx_in
@@ -530,14 +495,8 @@ def main(idx, FLAGS):
             termI_hess = POPmodel.pop_function_hessian(ev_chunk, uselog=True)
 
             print('\n\n\n termI', termI_ders.shape)
-            termII     = POPmodel.pop_function_hessian_termII(ev_chunk, FIM_chunk, parnums,ParPrior=None)
-            termIII    = POPmodel.pop_function_hessian_termIII(ev_chunk, FIM_chunk, parnums,ParPrior=None)
-            termIV     = POPmodel.pop_function_hessian_termIV(ev_chunk, FIM_chunk, Pdetder_chunk, parnums,ParPrior=None)
-            termV      = POPmodel.pop_function_hessian_termV(ev_chunk, FIM_chunk, parnums,ParPrior=None)
-
-            print('\n\n\n termII', termII.shape)
                 
-            to_file(termI_ders, termI_hess, termII, termIII, termIV, termV, FLAGS.fout, suff=suffstr)
+            to_file(termI_ders, termI_hess, FLAGS.fout, suff=suffstr)
             
         te=time.time()
         print('------ Total execution time: %s sec.\n\n' %( str((te-ti))))
@@ -552,8 +511,6 @@ def mainMPI(i):
 parser = argparse.ArgumentParser(prog = 'calculate_hyperpar_derivatives_from_catalog.py', description='Executable to run ``gwfast`` on a catalog of events, with the possibility to parallelize over multiple CPUs, ready to use both on single machines and on clusters.')
 parser.add_argument("--fname_obs", default='', type=str, required=True, help='Name of the file containing the catalog.')
 parser.add_argument("--fname_evSNRs", default='', type=str, required=True, help='Name of the file containing the SNRs for the events in the catalog.')
-parser.add_argument("--fname_evFIMs", default='', type=str, required=True, help='Name of the file containing the FIMs for the events in the catalog.')
-parser.add_argument("--fname_evSNRders", default='', type=str, required=True, help='Name of the file containing the SNR derivatives for the events in the catalog.')
 parser.add_argument("--fout", default='test_gwfast', type=str, required=True, help='Path to output folder, which has to exist before the script is launched.')
 
 
@@ -566,7 +523,7 @@ parser.add_argument("--rate_model_params_values", nargs='+', default=[ ], type=f
 parser.add_argument("--spin_model",  default='GaussNonPrecessing', type=str, required=False, help='Name of the spin distribution model.')
 parser.add_argument("--spin_model_params_names", nargs='+', default=[ ], type=str, required=False, help='Hyperparameters names of the spin distribution model, separated by *single spacing*.')
 parser.add_argument("--spin_model_params_values", nargs='+', default=[ ], type=float, required=False, help='Hyperparameters values of the spin distribution model, separated by *single spacing*.')
-parser.add_argument("--delta_model",  default='Gauss', type=str, required=False, help='Name of the delta PN distribution model.')
+parser.add_argument("--delta_model",  default='Gauss2D', type=str, required=False, help='Name of the delta PN distribution model.')
 parser.add_argument("--orderPN",  default=None, type=int, nargs='+', required=False, help='order of the PN deviations we are considering in our model.')
 parser.add_argument("--delta_model_params_names", nargs='+', default=[ ], type=str, required=False, help='Hyperparameters names of the delta distribution model, separated by *single spacing*.')
 parser.add_argument("--delta_model_params_values", nargs='+', default=[ ], type=float, required=False, help='Hyperparameters values of the delta distribution model, separated by *single spacing*.')
@@ -635,7 +592,6 @@ if __name__ =='__main__':
     print('Loading SNRs from %s...' %fname_evSNRs)
     
     snrs_loaded = onp.loadtxt(fname_evSNRs)
-    
     if FLAGS.idx_f is None:
         snrs_loaded = snrs_loaded[FLAGS.idx_in:]
     else:
@@ -645,48 +601,19 @@ if __name__ =='__main__':
 
     if FLAGS.snr_th != FLAGS.snr_th_FIM:
         print('Using different SNR threshold for Pdet and FIM: %s and %s' %(FLAGS.snr_th, FLAGS.snr_th_FIM))
-        detected = snrs_loaded > FLAGS.snr_th_FIM
+        detected = snrs_loaded>FLAGS.snr_th_FIM
         events_loaded_use = {k: events_loaded[k][detected] for k in events_loaded.keys()}
         snrs_loaded = snrs_loaded[detected]
     else:
         events_loaded_use = copy.deepcopy(events_loaded)
 
-    
-    fname_evFIMs = os.path.join(FLAGS.fname_evFIMs)
-    if not os.path.exists(fname_evFIMs):
-        raise ValueError('Path to FIMs does not exist. Value entered: %s' %fname_evFIMs)
-    print('Loading FIMs from %s...' %fname_evFIMs)
-    fishers_loaded = onp.load(fname_evFIMs)
-
-    if FLAGS.idx_f is None:
-        fishers_loaded = fishers_loaded[:,:,FLAGS.idx_in:]
-    else:
-        fishers_loaded = fishers_loaded[:,:,FLAGS.idx_in:FLAGS.idx_f]
-
-
-    fname_evSNRders = os.path.join(FLAGS.fname_evSNRders)
-    if not os.path.exists(fname_evSNRders):
-        raise ValueError('Path to SNR derivatives does not exist. Value entered: %s' %fname_evSNRders)
-    with h5py.File(fname_evSNRders, 'r') as derivs:
-        SNRderivativess_loaded = onp.array(derivs['derivative']['net'])
-
-    if FLAGS.idx_f is None:
-        SNRderivativess_loaded = SNRderivativess_loaded[:,FLAGS.idx_in:]
-    else:
-        SNRderivativess_loaded = SNRderivativess_loaded[:,FLAGS.idx_in:FLAGS.idx_f]
-        
-    print('\n\n', 'der snr SHAPE', SNRderivativess_loaded.shape[-1],'\n\n')
-    print('\n\n', 'FIM SHAPE', fishers_loaded.shape[-1],'\n\n')
     print('\n\n', 'SNR SHAPE', len(snrs_loaded),'\n\n')
     print('\n\n', 'EVENTs SHAPE', len(events_loaded_use['dL']),'\n\n')
     print(len(snrs_loaded))
     
 
     
-    #assert SNRderivativess_loaded.shape[-1] == len(events_loaded_use['dL']) == fishers_loaded.shape[-1] == len(snrs_loaded)
-    if not (SNRderivativess_loaded.shape[-1] == len(events_loaded_use['dL']) == fishers_loaded.shape[-1] ==len(snrs_loaded)):
-        print("Shapes:", SNRderivativess_loaded.shape, len(events_loaded_use['dL']), fishers_loaded.shape, len(snrs_loaded))
-        raise AssertionError("Inconsistent shapes between SNR derivatives, events and FIMs")
+    assert len(events_loaded_use['dL']) == len(snrs_loaded)
 
 
     #####################################################################################
@@ -705,7 +632,11 @@ if __name__ =='__main__':
     if FLAGS.spin_model_params_names:
         for i,par in enumerate(FLAGS.spin_model_params_names):
             SPIN_model.update_hyperparameters({par: FLAGS.spin_model_params_values[i]})
-    DELTA_model = delta_models_dict[FLAGS.delta_model]()
+    DELTA_model_class = delta_models_dict[FLAGS.delta_model]
+    if FLAGS.orderPN:
+        DELTA_model = DELTA_model_class(orderPN=FLAGS.orderPN)
+    else:
+        DELTA_model = DELTA_model_class()
     if FLAGS.delta_model_params_names:
         for i,par in enumerate(FLAGS.delta_model_params_names):
             DELTA_model.update_hyperparameters({par: FLAGS.delta_model_params_values[i]})
@@ -748,7 +679,6 @@ if __name__ =='__main__':
     pop_rec=POPmodel.pop_function(events_loaded_use,uselog=False)
 
     finite_indices=pop_rec>th
-    print('SELECTED INDX:', finite_indices)
     events_loaded_use = {k: events_loaded_use[k][finite_indices] for k in events_loaded_use.keys()}
     selected_indices = onp.where(finite_indices)[0]
     idx_sel=len(selected_indices)
@@ -780,6 +710,7 @@ if __name__ =='__main__':
 
 
 
+    #utils.save_data(os.path.join(FLAGS.fout,'used_pdraw.h5'), events_loaded_use)
     nevents_total = len(events_loaded_use[keylist[0]])
     print('Using events between %s and %s with SNR>%s, total %s events' %(FLAGS.idx_in, FLAGS.idx_f, FLAGS.snr_th_FIM, nevents_total))
     print('Among them, the ones above pop_rec>10**-20 are', (idx_sel))
@@ -874,9 +805,7 @@ if __name__ =='__main__':
     
     events_lists = {str(i):[] for i in range(npools)}
     idxs_lists = {str(i):[] for i in range(npools)}
-    FIMs_lists = {str(i):[] for i in range(npools)}
     snrs_lists = {str(i):[] for i in range(npools)}
-    SNRderivatives_lists = {str(i):[] for i in range(npools)}
     
     pin=0
     for it in range(all_batch_sizes.shape[0]): # iterations
@@ -885,9 +814,7 @@ if __name__ =='__main__':
             if pf>pin:
                 events_lists[str(p)].append({k: events_loaded_use[k][pin:pf] for k in events_loaded_use.keys()})
                 idxs_lists[str(p)].append( (pin, pf) )
-                FIMs_lists[str(p)].append(fishers_loaded[:,:,pin:pf])
                 snrs_lists[str(p)].append(snrs_loaded[pin:pf])
-                SNRderivatives_lists[str(p)].append(SNRderivativess_loaded[:,pin:pf])
                 nevents_chunk = len(events_lists[str(p)][-1]['dL'])
                 assert nevents_chunk == all_batch_sizes[it, p]
                 pin = pf
@@ -901,9 +828,7 @@ if __name__ =='__main__':
     FLAGS.all_n_it_pools = all_n_it_pools
     FLAGS.events_lists = events_lists
     FLAGS.idxs_lists = idxs_lists
-    FLAGS.fishers_lists = FIMs_lists
     FLAGS.snrs_lists = snrs_lists
-    FLAGS.SNRderivatives_lists = SNRderivatives_lists
     
     ############################################################################
     # Run processes in parallel
@@ -942,21 +867,17 @@ if __name__ =='__main__':
                 if pf>pin:
                     print('Concatenating files from %s to %s' %(pin, pf))
                     suff_batch = '_'+str(pin)+'_to_'+str(pf)
-                    termI_der_, termI_hess_, termII_, termIII_, termIV_, termV_ = from_file( FLAGS.fout, suff=suff_batch)
+                    termI_der_, termI_hess_ = from_file( FLAGS.fout, suff=suff_batch)
                     if not temrs_initialised:
-                        termI_der, termI_hess, termII, termIII, termIV, termV = termI_der_, termI_hess_, termII_, termIII_, termIV_, termV_
+                        termI_der, termI_hess = termI_der_, termI_hess_
                         temrs_initialised=True
                     else:
                         termI_der   = onp.concatenate([termI_der, termI_der_], axis=-1)
                         termI_hess  = onp.concatenate([termI_hess, termI_hess_], axis=-1)
-                        termII      = onp.concatenate([termII, termII_], axis=-1)
-                        termIII     = onp.concatenate([termIII, termIII_], axis=-1)
-                        termIV      = onp.concatenate([termIV, termIV_], axis=-1)
-                        termV       = onp.concatenate([termV, termV_], axis=-1)
                 
                     pin = pf
     
-        to_file(termI_der, termI_hess, termII, termIII, termIV, termV, FLAGS.fout, suff=suffstr)
+        to_file(termI_der, termI_hess, FLAGS.fout, suff=suffstr)
                 
         if (FLAGS.npools>1) or (FLAGS.npools==1 and all_n_it_pools[0]>1): 
             print('Cleaning...')
