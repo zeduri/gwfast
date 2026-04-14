@@ -1172,6 +1172,7 @@ def open_catalog(path_pdraw,path_single_FIMs,idx_i,idx_f,popterms=False,path_pop
 
 
 def open_catalog_simple(path_pdraw,path_single_FIMs,idx_i,idx_f,popterms=False,path_pop_terms=None):
+    #To load stuff when only Gamma I is computed 
     #path_pdraw: path to the folder containing the file pdraw.h5
     #path_single_FIMs to folder SingleEventFishers containing the outputs of gwfast: all_derivatives_SNR_{idx_i}_to_{idx_f}.hdf5,fishers_{idx_i}_to_{idx_f}.npy,snrs_{idx_i}_to_{idx_f}.txt
     '''
@@ -1203,173 +1204,93 @@ def open_catalog_simple(path_pdraw,path_single_FIMs,idx_i,idx_f,popterms=False,p
         return N_samp,theta_samples,rho,termI_der,termI_hess
 
 
-def plot_mass_rate_spin_delta_distributions(p_pop,p_draw=None,samples_pdraw=None,samples_pop=None):
-    '''
-    Plot the mass, rate and spin distributions of the injected and recovered populations.
-    :param class p_draw: injected population.
-    :param class p_pop: recovered population.
-    :return None: plot the mass, rate and spin distributions of the injected and recovered populations.
-    '''
-    fig, axs = plt.subplots(3, 2, figsize=(10, 10.))
-    fontsize=12
-    ###############################################################
-    # MASSES
-    ###############################################################
 
-    if p_draw is not None:
-        if isinstance(p_draw.mass_function,PowerLawPlusPeak_modsmooth_MassDistribution) or isinstance(p_draw.mass_function,TruncatedPowerLaw_modsmooth_MassDistribution):
-            xhigh=max(p_draw.hyperpar_dict['m_max']+p_draw.hyperpar_dict['sigma_h'],p_pop.hyperpar_dict['m_max']+p_pop.hyperpar_dict['sigma_h'])
-        elif isinstance(p_draw.mass_function,PowerLawPlusPeak_MassDistribution) or isinstance(p_draw.mass_function,TruncatedPowerLaw_MassDistribution):
-            xhigh=max(p_draw.hyperpar_dict['m_max'],p_pop.hyperpar_dict['m_max'])
-    else:
-        if isinstance(p_pop.mass_function,PowerLawPlusPeak_modsmooth_MassDistribution) or isinstance(p_pop.mass_function,TruncatedPowerLaw_modsmooth_MassDistribution):
-            xhigh=p_pop.hyperpar_dict['m_max']+p_pop.hyperpar_dict['sigma_h']
-        elif isinstance(p_pop.mass_function,PowerLawPlusPeak_MassDistribution) or isinstance(p_pop.mass_function,TruncatedPowerLaw_MassDistribution):
-            xhigh=p_pop.hyperpar_dict['m_max']
-    mgrid=np.linspace(0.01,xhigh,100)
-    m2grid=np.linspace(0.01,xhigh,100)
-    j,k=0,0
-    axs[j,k].plot(mgrid,p_pop.mass_function._mass1_function(mgrid)/np.trapz(p_pop.mass_function._mass1_function(mgrid),mgrid),color='C2',lw=2.,label=r'$p_{\mathrm pop}(\theta|\lambda)$')
-    axs[j,k].set_xlabel('$m_1~[M_\odot]$',fontsize=fontsize)
+def plot_pop_alligned_GR(p_draw, samples_pdraw=None):
+    FS = 18  #Fontsize lables
+    TS = 14  #Fontsize tick
+    LW = 3   #Line width
     
-    j,k=0,1
-    axs[j,k].set_xlabel('$m_2~[M_\odot]$',fontsize=fontsize)
-    m1,m2=np.meshgrid(mgrid,m2grid,indexing='ij')
-    pdf_joint_rec=np.where(m2<=m1,p_pop.mass_function.mass_function(m1,m2),0)
+    fig, axs = plt.subplots(2, 3, figsize=(20, 10))
+    col_m, col_z, col_gr, col_chi = 'C0', 'C1', 'C3', 'C2'
+
+    ###############################################################
+    # MASS and REDSHIFT
+    ###############################################################
+    xhigh = p_draw.mass_function.hyperpar_dict['m_max'] + p_draw.hyperpar_dict.get('sigma_h', 0)
+    mgrid = np.linspace(2.0, xhigh, 200)
     
-    p_m2_rec=np.trapz(pdf_joint_rec,m1,axis=0)
-    axs[j,k].plot(m2grid,p_m2_rec,color='C2',lw=2.,ls='solid',label='rec')
-    if p_draw is not None:
-        '''plot the injected mass distribution'''
-        axs[0,0].plot(mgrid,p_draw.mass_function._mass1_function(mgrid)/np.trapz(p_draw.mass_function._mass1_function(mgrid),mgrid),color='C3',lw=2.,label=r'$p_{\mathrm draw}(\theta)$')
-        pdf_joint_inj=np.where(m2<=m1,p_draw.mass_function.mass_function(m1,m2),0)
-        p_m2_inj=np.trapz(pdf_joint_inj,m1,axis=0)
-        axs[0,1].plot(m2grid,p_m2_inj,color='C3',lw=2.,ls='solid',label='inj')
-    if samples_pdraw is not None:
-        '''plot the mass samples from the injected population'''
-        axs[0,0].hist(samples_pdraw['m1_src'], density=True, histtype='step', color='C3', label='samples $p_\mathrm{draw}$')
-        axs[0,1].hist(samples_pdraw['m2_src'],density=True,histtype='step',color='C3')
-    if samples_pop is not None:
-        '''plot the mass samples from the true population'''
-        axs[0,0].hist(samples_pop['m1_src'], density=True, histtype='step', color='C2', label='samples $p_\mathrm{pop}$')
-        axs[0,1].hist(samples_pop['m2_src'],density=True,histtype='step',color='C2')
+    #[0,0] Primary Mass m1 (LOG)
+    pm1 = p_draw.mass_function._mass1_function(mgrid)
+    axs[0,0].plot(mgrid, pm1/np.trapz(pm1, mgrid), color=col_m, lw=LW)
+    axs[0,0].set_ylabel(r'$p(m_1)$', fontsize=FS)
+    axs[0,0].set_xlabel(r'$m_1~[M_\odot]$', fontsize=FS)
+
+    #[0,1] Secondary Mass m2 (LOG)
+    m1, m2 = np.meshgrid(mgrid, mgrid, indexing='ij')
+    pdf_j = np.where(m2 <= m1, p_draw.mass_function.mass_function(m1, m2), 0)
+    p_m2 = np.trapz(pdf_j, mgrid, axis=0)
+    axs[0,1].plot(mgrid, p_m2, color=col_m, lw=LW)
+    axs[0,1].set_ylabel(r'$p(m_2)$', fontsize=FS)
+    axs[0,1].set_xlabel(r'$m_2~[M_\odot]$', fontsize=FS)
+
+    #[0,2] Redshift z (LIN)
+    z_max = p_draw.rate_function.priorlims_dict['z'][1]
+    zgrid = np.linspace(0.01, z_max, 200)
+    axs[0,2].plot(zgrid, p_draw.rate_function.rate_function(zgrid), color=col_z, lw=LW)
+    axs[0,2].set_ylabel(r'$p(z)$', fontsize=FS)
+    axs[0,2].set_xlabel(r'$z$', fontsize=FS)
 
     ###############################################################
-    # rate
+    # GR and SPIN
     ###############################################################
+    #[1,0] GR Deviation delta_varphi (LIN)
+    gr_dist = p_draw.PhiPN_function
+    mu_gr = gr_dist.hyperpar_dict[gr_dist.mu_name]
+    sig_gr = gr_dist.hyperpar_dict[gr_dist.sigma_name]
+    phi_grid = np.linspace(mu_gr - 5*sig_gr, mu_gr + 5*sig_gr, 300)
     
-    j,k=1,0
-    rgrid=np.linspace(0.01,10,100)
-    axs[j,k].plot(rgrid,p_pop.rate_function.rate_function(rgrid),color='C2',lw=2.)
-    axs[j,k].set_xlabel('$z$',fontsize=fontsize)
-    if p_draw is not None:
-        axs[j,k].set_xlim(p_draw.priorlims_dict['z'][0],p_draw.priorlims_dict['z'][-1])
-    else:
-        axs[j,k].set_xlim(p_pop.priorlims_dict['z'][0],p_pop.priorlims_dict['z'][-1])
-    if p_draw is not None:
-        '''plot the injected redshift distribution'''
-        axs[j,k].plot(rgrid,p_draw.rate_function.rate_function(rgrid),color='C3',lw=3.)
-    if samples_pdraw is not None:
-        '''plot the redshift samples from the injected population'''        
-        axs[j,k].hist(samples_pdraw['z'],density=True,histtype='step',color='C3')       
-    if samples_pop is not None:
-        '''plot the redshift samples from the true population'''
-        axs[j,k].hist(samples_pop['z'],density=True,histtype='step',color='C2')
+    axs[1,0].plot(phi_grid, gr_dist.PhiPN_function(phi_grid), color=col_gr, lw=LW)
+    axs[1,0].axvline(0, color='black', ls='--', alpha=0.4)
+    axs[1,0].set_ylabel(r'$p(\delta\varphi_{%s})$' % gr_dist.order_idx, fontsize=FS)
+    axs[1,0].set_xlabel(r'$\delta\varphi_{%s}$' % gr_dist.order_idx, fontsize=FS)
 
+    #[1,1] Spin chi1z (LIN)
+    chi_grid = np.linspace(-1, 1, 400)
+    mu_c, sig_c = p_draw.spin_function.hyperpar_dict['mu_chi'], p_draw.spin_function.hyperpar_dict['sigma_chi']
+    p_chi = trunc_gaussian_norm(chi_grid, mu_c, sig_c, lower=-1, upper=1)
+    
+    axs[1,1].plot(chi_grid, p_chi, color=col_chi, lw=LW)
+    axs[1,1].set_ylabel(r'$p(\chi_{1z})$', fontsize=FS)
+    axs[1,1].set_xlabel(r'$\chi_{1z}$', fontsize=FS)
 
-    ###############################################################
-    # delta PN
-    ###############################################################
-
-    j,k = 1,1
-    dgrid=np.linspace(-0.5,0.5,1000)
-    axs[j,k].plot(dgrid,p_pop.delta_function.delta_function(dgrid),color='C2',lw=2.)
-    axs[j,k].set_xlabel('$\delta_{PN}$',fontsize=fontsize)
-    if p_draw is not None:
-        axs[j,k].set_xlim(p_draw.priorlims_dict['deltaPN'][0],p_draw.priorlims_dict['deltaPN'][-1])
-    else:
-        axs[j,k].set_xlim(p_pop.priorlims_dict['deltaPN'][0],p_pop.priorlims_dict['deltaPN'][-1])
-    if p_draw is not None:
-        '''plot the injected delta PN distribution'''
-        axs[j,k].plot(dgrid,p_draw.delta_function.delta_function(dgrid),color='C3',lw=3.)
-    if samples_pdraw is not None:
-        '''plot the delta PN samples from the injected population'''        
-        axs[j,k].hist(samples_pdraw['deltaPN'],density=True,histtype='step',color='C3')       
-    if samples_pop is not None:
-        '''plot the delta PN samples from the true population'''
-        axs[j,k].hist(samples_pop['deltaPN'],density=True,histtype='step',color='C2')
+    #[1,2] Spin chi2z (LIN)
+    axs[1,2].plot(chi_grid, p_chi, color=col_chi, lw=LW)
+    axs[1,2].set_ylabel(r'$p(\chi_{2z})$', fontsize=FS)
+    axs[1,2].set_xlabel(r'$\chi_{2z}$', fontsize=FS)
 
     ###############################################################
-    # spins
+    # Formatting stuff
     ###############################################################
+    for i in range(2):
+        for j in range(3):
+            ax = axs[i,j]
+            ax.grid(True, which='major', lw=0.6, alpha=0.4)
+            ax.tick_params(axis='both', which='major', labelsize=TS, length=8, direction='in')
+            
+            if i == 0 and j < 2:
+                ax.set_yscale('log')
+                ax.set_ylim(1e-5, 5)
+                ax.minorticks_on()
+                ax.tick_params(axis='both', which='minor', length=4, direction='in')
+            else:
+                ax.set_yscale('linear')
+                ax.set_ylim(0, None)
+                ax.minorticks_off()
 
+    plt.tight_layout()
+    return fig
 
-    if isinstance(p_draw.spin_function,DefaultPrecessing_SpinDistribution) or isinstance(p_draw.spin_function,TruncatedPowerLaw_modsmooth_MassDistribution):
-        j,k=2,0
-        chi_grid=np.linspace(0.0001,1.,100)
-        xx=p_pop.spin_function._chimagnitude_function(chi_grid)
-        axs[j,k].plot(chi_grid,xx,color='C2',lw=2.,label='rec')
-        axs[j,k].set_xlabel('$\chi$',fontsize=fontsize)
-        if p_draw is not None:
-            axs[j,k].set_xlim(p_draw.priorlims_dict['chi1'][0],p_draw.priorlims_dict['chi1'][-1])
-        else:
-            axs[j,k].set_xlim(p_pop.priorlims_dict['chi1'][0],p_pop.priorlims_dict['chi1'][-1])
-        if p_draw is not None:
-            '''plot the injected spim distribution'''
-            x=p_draw.spin_function._chimagnitude_function(chi_grid)
-            axs[j,k].plot(chi_grid,x,color='C3',lw=2.)
-        if samples_pdraw is not None:
-            '''plot the spin samples from the injected population'''
-            axs[j,k].hist(samples_pdraw['chi1'],density=True,histtype='step',color='C3')   
-        if samples_pop is not None:
-            '''plot the spin samples from the true population'''
-            axs[j,k].hist(samples_pop['chi1'],density=True,histtype='step',color='C2')
-
-
-    ###############################################################
-    # tilts
-    ###############################################################
-
-        j,k=2,1
-        tilt_grid=np.linspace(-1,1,100)
-        xx=p_pop.spin_function._coschitilt_function(tilt_grid)
-        axs[j,k].plot(tilt_grid,xx,color='C2',lw=2.)
-        axs[j,k].set_xlabel(r'$\theta$',fontsize=fontsize)
-        if p_draw is not None:
-            axs[j,k].set_xlim(np.cos(p_draw.priorlims_dict['tilt1'][0]),np.cos(p_draw.priorlims_dict['tilt1'][-1]))
-        else:
-            axs[j,k].set_xlim(np.cos(p_pop.priorlims_dict['tilt1'][0]),np.cos(p_pop.priorlims_dict['tilt1'][-1]))
-        if p_draw is not None:
-            '''plot the injected tilt distribution'''
-            x=p_draw.spin_function._coschitilt_function(tilt_grid)
-            axs[j,k].plot(tilt_grid,x,color='C3',lw=2.)
-        if samples_pdraw is not None:
-            '''plot the tilt samples from the injected population'''
-            axs[j,k].hist(np.cos(samples_pdraw['tilt1']),density=True,histtype='step',color='C3')   
-        if samples_pop is not None:
-            '''plot the tilt samples from the true population'''
-            axs[j,k].hist(np.cos(samples_pop['tilt1']),density=True,histtype='step',color='C2')
-
-    else:
-        j,k=2,0
-        chi_grid=np.linspace(0.0001,1.,100)
-        xx = p_pop.spin_function.spin_function(chi_grid, chi_grid)
-        axs[j,k].plot(chi_grid,xx,color='C2',lw=2.)
-        axs[j,k].set_xlabel(r'$\chi$',fontsize=fontsize)
-
-
-    for ax_row in axs:
-        for ax in ax_row:
-            ax.minorticks_on()
-            ax.tick_params(axis='both', which='both', direction='in', length=6, width=1, colors='black')
-            ax.tick_params(axis='both', which='minor', direction='in', length=3)
-            ax.set_ylim(bottom=1e-7, top=1.3e1)
-            ax.grid(True, which='both', linewidth=0.5, alpha=0.5)
-            ax.set_yscale('log')
-    axs[0,0].legend(loc='upper right')
-
-    return 
-
+    
 def save_data(fname, data, ):
     """
     Store a dictionary containing the events parameters in ``h5`` file.

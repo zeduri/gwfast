@@ -27,7 +27,7 @@ class FisherMatrixCalculator(object):
                  path_single_FIMs,
                  path_pop_terms,
                  idx_i,idx_f,
-                 simple=0):
+                 simple=0): #The 'simple' command is used when you want only the Gamma I term
         r"""
         Parameters:
         :param population_model_injection: injection distribution p_draw(\theta).
@@ -56,6 +56,7 @@ class FisherMatrixCalculator(object):
 
         #load pdraw samples, snrs, derivatives of snr, single event fisher matrices, and the integrands provided by the module gwfast.population.calculate_hyperpar_derivatives_from_catalog
         if simple == 0:
+        #For the full computation
             N_samp,theta_samples,snr,der_snr,FIMs,termI_der,termI_hess,termII,termIII,termIV,termV=open_catalog(path_pdraw,path_single_FIMs,idx_i,idx_f,popterms=True,path_pop_terms=path_pop_terms)
             self.pop_inj=self.POP_inj.pop_function(theta_samples,uselog=False)
             self.pop_rec=self.POP_rec.pop_function(theta_samples,uselog=False)
@@ -71,7 +72,9 @@ class FisherMatrixCalculator(object):
             self.termIII=termIII
             self.termIV=termIV
             self.termV=termV
+            
         elif simple==1:
+        #When computing only Gamma I
             N_samp,theta_samples,snr,termI_der,termI_hess=open_catalog_simple(path_pdraw,path_single_FIMs,idx_i,idx_f,popterms=True,path_pop_terms=path_pop_terms)
             self.pop_inj=self.POP_inj.pop_function(theta_samples,uselog=False)
             self.pop_rec=self.POP_rec.pop_function(theta_samples,uselog=False)
@@ -113,13 +116,6 @@ class FisherMatrixCalculator(object):
         :param array pdet_theta: detection probability.
         :return float: selection effects.
         """
-
-        #mask = (self.snr > self.snr_th) & (self.pop_inj > 1e-12)
-        #if np.sum(mask) == 0:
-        #    return 0.0
-        #    
-        #return (1 / self.N_samp) * np.sum(pdet_theta[mask] * self.pop_rec[mask] / self.pop_inj[mask])
-
         
         return (1 / self.N_samp)*np.sum(pdet_theta*self.pop_rec/self.pop_inj)
 
@@ -290,6 +286,7 @@ class FisherMatrixCalculator(object):
         Function to compute the population Fisher matrix Gamma_Lambda.
         Parameters:
         :param bool save_MC_args: if True, return the integrands.
+        :simple int: if 0, compute the full pop fisher matrix, if 1 compute only Gamma I.
         :return ndarray: array of shape (N_hyper,N_hyper) containing the population Fisher matrix.
         """
 
