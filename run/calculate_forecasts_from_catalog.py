@@ -652,10 +652,10 @@ def main(idx, FLAGS):
             wf_model = wf_models_dict[FLAGS.wf_model]
             
             if FLAGS.devPN is not None:
-                wf_class = wf_model.__class__  # ottieni la classe dell’oggetto
-                sig = inspect.signature(wf_class.__init__)  # controlla i parametri del costruttore
+                wf_class = wf_model.__class__
+                sig = inspect.signature(wf_class.__init__)
                 if 'devPN' in sig.parameters:
-                    wf_model = wf_class(devPN=FLAGS.devPN, orderPN=FLAGS.orderPN)  # ricrea l’oggetto con devPN
+                    wf_model = wf_class(devPN=FLAGS.devPN, orderPN=FLAGS.orderPN)
                     print("Recreated waveform with deltaPN parameter!")
                 else:
                     print(f" Waveform {wf_class.__name__} does not support devPN, proceeding without it.")
